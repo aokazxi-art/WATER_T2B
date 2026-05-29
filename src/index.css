@@ -1,0 +1,29 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+input[type="range"] {
+  cursor: pointer;
+}
+
+input[type="number"], input[type="text"] {
+  transition: border-color .15s;
+}
+input[type="number"]:focus, input[type="text"]:focus {
+  border-color: #3b82f6 !important;
+}
