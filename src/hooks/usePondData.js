@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus, randomWalk } from '../utils/waterLevel';
 
 const SENSOR_OFFSET = 30;   // ระยะออฟเซ็ตของเซ็นเซอร์เหนือขอบบ่อ (ซม.)
@@ -42,9 +42,14 @@ export function usePondData() {
     Object.fromEntries(loadPonds().map(p => [p.id, initSensorDistance(p.depth)]))
   );
 
-  // state ประวัติ % ระดับน้ำแต่ละบ่อ { [pondId]: number[] }
+  // state ประวัติ reading แต่ละบ่อ { [pondId]: { pct, time, battery }[] }
   const [histories, setHistories] = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
+  );
+
+  // ref เก็บระดับแบตเตอรี่เซ็นเซอร์แต่ละบ่อ (ไม่ต้อง render ใหม่เมื่อเปลี่ยน)
+  const batteryRef = useRef(
+    Object.fromEntries(loadPonds().map(p => [p.id, 80 + Math.random() * 20]))
   );
 
   // บันทึกข้อมูลบ่อลง localStorage ทุกครั้งที่มีการเปลี่ยนแปลง
@@ -68,7 +73,7 @@ export function usePondData() {
     return () => clearInterval(timer); // ล้าง interval เมื่อ unmount
   }, [ponds]);
 
-  // อัปเดตประวัติระดับน้ำทุกครั้งที่ค่าเซ็นเซอร์เปลี่ยน
+  // อัปเดตประวัติ reading ทุกครั้งที่ค่าเซ็นเซอร์เปลี่ยน
   useEffect(() => {
     setHistories(prev => {
       const next = { ...prev };
@@ -77,7 +82,12 @@ export function usePondData() {
         if (dist == null) return;
         const wh = calcWaterHeight(dist, p.depth);
         const pct = calcWaterPercent(wh, p.depth);
-        const arr = [...(prev[p.id] || []), pct];
+        // แบตค่อยๆ ลดทีละนิด (จำลองการใช้พลังงาน)
+        batteryRef.current[p.id] = Math.max(
+          0, Math.min(100, (batteryRef.current[p.id] ?? 85) - Math.random() * 0.4)
+        );
+        const entry = { pct, time: Date.now(), battery: batteryRef.current[p.id] };
+        const arr = [...(prev[p.id] || []), entry];
         next[p.id] = arr.slice(-HISTORY_SIZE); // เก็บแค่ HISTORY_SIZE จุดล่าสุด
       });
       return next;

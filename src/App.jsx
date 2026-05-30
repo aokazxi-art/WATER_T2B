@@ -1,34 +1,69 @@
 import { useState } from 'react';
 import HomePage from './pages/HomePage';
 import PondDetailPage from './pages/PondDetailPage';
+import PondSettingsPage from './pages/PondSettingsPage';
 import { usePondData } from './hooks/usePondData';
 
+// หน้าที่เป็นไปได้: 'home' | 'detail' | 'settings'
 export default function App() {
-  // โหลดข้อมูลบ่อและฟังก์ชันต่างๆ จาก hook
   const { ponds, updatePond, setSensorDistance, getPondState } = usePondData();
 
-  // เก็บ id ของบ่อที่เลือกดูรายละเอียด (null = อยู่หน้าหลัก)
-  const [selectedPondId, setSelectedPondId] = useState(null);
+  const [page, setPage] = useState('home');          // หน้าปัจจุบัน
+  const [selectedPondId, setSelectedPondId] = useState(null); // บ่อที่เลือก
 
-  // ถ้าเลือกบ่อแล้ว ให้แสดงหน้ารายละเอียดบ่อนั้น
-  if (selectedPondId != null) {
+  // เปิดหน้ารายละเอียดบ่อ
+  function openDetail(id) {
+    setSelectedPondId(id);
+    setPage('detail');
+  }
+
+  // เปิดหน้าตั้งค่า (จากปุ่มฟันเฟืองในหน้า detail)
+  function openSettings() {
+    setPage('settings');
+  }
+
+  // ย้อนกลับจากหน้าตั้งค่า → หน้า detail
+  function backFromSettings() {
+    setPage('detail');
+  }
+
+  // ย้อนกลับจากหน้า detail → หน้าหลัก
+  function backFromDetail() {
+    setSelectedPondId(null);
+    setPage('home');
+  }
+
+  if (page === 'settings' && selectedPondId != null) {
+    const state = getPondState(selectedPondId);
+    if (!state) return null;
+    return (
+      <PondSettingsPage
+        pond={state.pond}
+        onUpdate={(updates) => updatePond(selectedPondId, updates)}
+        onBack={backFromSettings}
+      />
+    );
+  }
+
+  if (page === 'detail' && selectedPondId != null) {
     return (
       <PondDetailPage
         pondId={selectedPondId}
         getPondState={getPondState}
         updatePond={updatePond}
         setSensorDistance={setSensorDistance}
-        onBack={() => setSelectedPondId(null)} // กดย้อนกลับ → ล้าง selection
+        onBack={backFromDetail}
+        onOpenSettings={openSettings}
       />
     );
   }
 
-  // แสดงหน้าหลัก รายการบ่อทั้งหมด
+  // หน้าหลัก รายการบ่อทั้งหมด
   return (
     <HomePage
       ponds={ponds}
       getPondState={getPondState}
-      onSelectPond={setSelectedPondId}
+      onSelectPond={openDetail}
     />
   );
 }
