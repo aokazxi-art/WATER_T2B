@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus, randomWalk } from '../utils/waterLevel';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ref, onValue } from 'firebase/database';
+import { db } from '../firebase';
+import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
 
-const SENSOR_OFFSET = 30;   // ระยะออฟเซ็ตของเซ็นเซอร์เหนือขอบบ่อ (ซม.)
-const HISTORY_SIZE = 20;    // เก็บประวัติ % ย้อนหลังสูงสุด 20 จุด
-const UPDATE_INTERVAL = 3000; // อัปเดตค่าเซ็นเซอร์ทุก 3 วินาที
+const SENSOR_OFFSET = 30;
+const HISTORY_SIZE = 20;
 
-// ข้อมูลบ่อเริ่มต้นเมื่อยังไม่มีข้อมูลใน localStorage
 const DEFAULT_PONDS = [
   { id: 1, name: 'Pond A', depth: 150, width: 300, length: 400, thresholdYellow: 70, thresholdRed: 80 },
   { id: 2, name: 'Pond B', depth: 120, width: 250, length: 350, thresholdYellow: 70, thresholdRed: 80 },
@@ -13,7 +13,6 @@ const DEFAULT_PONDS = [
   { id: 4, name: 'Pond D', depth: 180, width: 350, length: 450, thresholdYellow: 70, thresholdRed: 85 },
 ];
 
-// โหลดข้อมูลบ่อจาก localStorage ถ้ามี ไม่งั้นใช้ค่าเริ่มต้น
 function loadPonds() {
   try {
     const saved = localStorage.getItem('water_monitor_ponds');
@@ -22,93 +21,59 @@ function loadPonds() {
   return DEFAULT_PONDS;
 }
 
-// บันทึกข้อมูลบ่อลง localStorage
 function savePonds(ponds) {
   localStorage.setItem('water_monitor_ponds', JSON.stringify(ponds));
 }
 
-// คำนวณระยะเซ็นเซอร์เริ่มต้นให้ระดับน้ำอยู่ที่ ~60%
-function initSensorDistance(depth) {
-  const waterHeight = depth * 0.6;
-  return depth + SENSOR_OFFSET - waterHeight;
-}
-
 export function usePondData() {
-  // state รายการบ่อทั้งหมด
   const [ponds, setPonds] = useState(loadPonds);
-
-  // state ระยะวัดของเซ็นเซอร์แต่ละบ่อ { [pondId]: distanceCm }
-  const [sensorDistances, setSensorDistances] = useState(() =>
-    Object.fromEntries(loadPonds().map(p => [p.id, initSensorDistance(p.depth)]))
-  );
-
-  // state ประวัติ reading แต่ละบ่อ { [pondId]: { pct, time, battery }[] }
+  const [sensorDistances, setSensorDistances] = useState({});
   const [histories, setHistories] = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
   );
 
-  // ref เก็บระดับแบตเตอรี่เซ็นเซอร์แต่ละบ่อ (ไม่ต้อง render ใหม่เมื่อเปลี่ยน)
-  const batteryRef = useRef(
-    Object.fromEntries(loadPonds().map(p => [p.id, 80 + Math.random() * 20]))
-  );
-
-  // บันทึกข้อมูลบ่อลง localStorage ทุกครั้งที่มีการเปลี่ยนแปลง
   useEffect(() => {
     savePonds(ponds);
   }, [ponds]);
 
-  // จำลองการอ่านค่าเซ็นเซอร์ทุก 3 วินาที (random walk)
+  // ดึงข้อมูลจาก Firebase real-time
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSensorDistances(prev => {
-        const next = { ...prev };
-        ponds.forEach(p => {
-          const minDist = SENSOR_OFFSET;               // ระยะน้อยสุด = น้ำเต็ม 100%
-          const maxDist = p.depth + SENSOR_OFFSET;     // ระยะมากสุด = น้ำว่าง 0%
-          next[p.id] = randomWalk(prev[p.id] ?? initSensorDistance(p.depth), minDist, maxDist, 1.5);
+    const unsubscribes = ponds.map(p => {
+      const sensorRef = ref(db, `ponds/pond_${p.id}/last_reading`);
+      return onValue(sensorRef, (snapshot) => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        const dist = data.raw_cm; // ค่าระยะจากเซนเซอร์ (cm)
+
+        setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
+
+        setHistories(prev => {
+          const wh = calcWaterHeight(dist, p.depth);
+          const pct = calcWaterPercent(wh, p.depth);
+          const entry = { pct, time: data.timestamp ?? Date.now(), battery: data.battery ?? null };
+          const arr = [...(prev[p.id] || []), entry];
+          return { ...prev, [p.id]: arr.slice(-HISTORY_SIZE) };
         });
-        return next;
       });
-    }, UPDATE_INTERVAL);
-    return () => clearInterval(timer); // ล้าง interval เมื่อ unmount
+    });
+
+    return () => unsubscribes.forEach(unsub => unsub());
   }, [ponds]);
 
-  // อัปเดตประวัติ reading ทุกครั้งที่ค่าเซ็นเซอร์เปลี่ยน
-  useEffect(() => {
-    setHistories(prev => {
-      const next = { ...prev };
-      ponds.forEach(p => {
-        const dist = sensorDistances[p.id];
-        if (dist == null) return;
-        const wh = calcWaterHeight(dist, p.depth);
-        const pct = calcWaterPercent(wh, p.depth);
-        // แบตค่อยๆ ลดทีละนิด (จำลองการใช้พลังงาน)
-        batteryRef.current[p.id] = Math.max(
-          0, Math.min(100, (batteryRef.current[p.id] ?? 85) - Math.random() * 0.4)
-        );
-        const entry = { pct, time: Date.now(), battery: batteryRef.current[p.id] };
-        const arr = [...(prev[p.id] || []), entry];
-        next[p.id] = arr.slice(-HISTORY_SIZE); // เก็บแค่ HISTORY_SIZE จุดล่าสุด
-      });
-      return next;
-    });
-  }, [sensorDistances]);
-
-  // อัปเดตข้อมูลบ่อโดย id (เช่น เปลี่ยนชื่อ / ขนาด / threshold)
   const updatePond = useCallback((id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   }, []);
 
-  // ตั้งค่าระยะเซ็นเซอร์ของบ่อโดยตรง (ใช้จาก slider จำลอง)
   const setSensorDistance = useCallback((id, dist) => {
     setSensorDistances(prev => ({ ...prev, [id]: dist }));
   }, []);
 
-  // คืนข้อมูลสถานะสมบูรณ์ของบ่อ id หนึ่งๆ (คำนวณ pct, volume, status ฯลฯ)
   const getPondState = useCallback((id) => {
     const pond = ponds.find(p => p.id === id);
     if (!pond) return null;
-    const dist = sensorDistances[id] ?? initSensorDistance(pond.depth);
+    const dist = sensorDistances[id];
+    if (dist == null) return { pond, dist: null, waterHeight: null, pct: null, volume: null, status: 'loading', history: histories[id] || [] };
     const waterHeight = calcWaterHeight(dist, pond.depth);
     const pct = calcWaterPercent(waterHeight, pond.depth);
     const volume = calcVolumeLiters(pond.width, pond.length, waterHeight);
