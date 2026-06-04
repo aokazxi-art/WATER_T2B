@@ -36,12 +36,47 @@ function saveSensorDistances(distances) {
   localStorage.setItem('water_monitor_sensor_distances', JSON.stringify(distances));
 }
 
+function loadSensorMeta() {
+  try {
+    const saved = localStorage.getItem('water_monitor_sensor_meta');
+    if (saved) return JSON.parse(saved);
+  } catch (_) {}
+  return {};
+}
+
+function saveSensorMeta(meta) {
+  localStorage.setItem('water_monitor_sensor_meta', JSON.stringify(meta));
+}
+
+function dayStr(date) {
+  const d = date || new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function appendDailyHistory(pondId, entry) {
+  const key = `water_daily_${pondId}_${dayStr()}`;
+  try {
+    const arr = JSON.parse(localStorage.getItem(key) || '[]');
+    arr.push(entry);
+    localStorage.setItem(key, JSON.stringify(arr.slice(-500)));
+  } catch (_) {}
+}
+
+export function loadDailyHistory(pondId, date) {
+  const key = `water_daily_${pondId}_${dayStr(date)}`;
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch (_) { return []; }
+}
+
 export function usePondData() {
   const [ponds, setPonds] = useState(loadPonds);
   const [sensorDistances, setSensorDistances] = useState(loadSensorDistances);
+  const [sensorMeta, setSensorMeta] = useState(loadSensorMeta);
   const [histories, setHistories] = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
   );
+  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
     savePonds(ponds);
@@ -51,6 +86,15 @@ export function usePondData() {
     saveSensorDistances(sensorDistances);
   }, [sensorDistances]);
 
+  useEffect(() => {
+    saveSensorMeta(sensorMeta);
+  }, [sensorMeta]);
+
+  useEffect(() => {
+    const connectedRef = ref(db, '.info/connected');
+    return onValue(connectedRef, snap => setIsConnected(snap.val() === true));
+  }, []);
+
   // ดึงข้อมูลจาก Firebase real-time
   useEffect(() => {
     const unsubscribes = ponds.map(p => {
@@ -59,14 +103,17 @@ export function usePondData() {
         const data = snapshot.val();
         if (!data) return;
 
-        const dist = data.raw_cm; // ค่าระยะจากเซนเซอร์ (cm)
+        const dist      = data.raw_cm;
+        const receivedAt = Date.now(); // ใช้เวลาที่รับข้อมูลจริง ไม่ใช้ clock ของ sensor
 
         setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
+        setSensorMeta(prev => ({ ...prev, [p.id]: { timestamp: receivedAt, battery: data.battery ?? null } }));
 
         setHistories(prev => {
-          const wh = calcWaterHeight(dist, p.depth);
-          const pct = calcWaterPercent(wh, p.depth);
-          const entry = { pct, time: data.timestamp ?? Date.now(), battery: data.battery ?? null };
+          const wh    = calcWaterHeight(dist, p.depth);
+          const pct   = calcWaterPercent(wh, p.depth);
+          const entry = { pct, time: receivedAt, battery: data.battery ?? null };
+          appendDailyHistory(p.id, entry);
           const arr = [...(prev[p.id] || []), entry];
           return { ...prev, [p.id]: arr.slice(-HISTORY_SIZE) };
         });
@@ -92,5 +139,5 @@ export function usePondData() {
     return { pond, dist, waterHeight, pct, volume, status, history: histories[id] || [] };
   }, [ponds, sensorDistances, histories]);
 
-  return { ponds, updatePond, getPondState };
+  return { ponds, updatePond, getPondState, sensorMeta, isConnected };
 }

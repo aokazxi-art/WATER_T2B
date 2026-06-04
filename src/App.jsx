@@ -2,11 +2,12 @@ import { useState } from 'react';
 import HomePage from './pages/HomePage';
 import PondDetailPage from './pages/PondDetailPage';
 import PondSettingsPage from './pages/PondSettingsPage';
+import ConnectionPage from './pages/ConnectionPage';
 import { usePondData } from './hooks/usePondData';
 
-// หน้าที่เป็นไปได้: 'home' | 'detail' | 'settings'
+// หน้าที่เป็นไปได้: 'home' | 'detail' | 'settings' | 'connection'
 export default function App() {
-  const { ponds, updatePond, getPondState } = usePondData();
+  const { ponds, updatePond, getPondState, sensorMeta, isConnected } = usePondData();
 
   const [page, setPage] = useState('home');          // หน้าปัจจุบัน
   const [selectedPondId, setSelectedPondId] = useState(null); // บ่อที่เลือก
@@ -31,6 +32,17 @@ export default function App() {
   function backFromDetail() {
     setSelectedPondId(null);
     setPage('home');
+  }
+
+  if (page === 'connection') {
+    return (
+      <ConnectionPage
+        ponds={ponds}
+        sensorMeta={sensorMeta}
+        isConnected={isConnected}
+        onBack={() => setPage('home')}
+      />
+    );
   }
 
   if (page === 'settings' && selectedPondId != null) {
@@ -62,7 +74,9 @@ export default function App() {
     <HomePage
       ponds={ponds}
       getPondState={getPondState}
+      isConnected={isConnected}
       onSelectPond={openDetail}
+      onOpenConnection={() => setPage('connection')}
     />
   );
 }

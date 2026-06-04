@@ -2,7 +2,25 @@
   "ponds": {
     "pond_1": {
       "last_reading": {
-        "raw_cm": 100,
+        "raw_cm": 70,
+        "timestamp": 1700000000000
+      }
+    },
+    "pond_2": {
+      "last_reading": {
+        "raw_cm": 80,
+        "timestamp": 1700000000000
+      }
+    },
+    "pond_3": {
+      "last_reading": {
+        "raw_cm": 90,
+        "timestamp": 1700000000000
+      }
+    },
+    "pond_4": {
+      "last_reading": {
+        "raw_cm": 50,
         "timestamp": 1700000000000
       }
     }
