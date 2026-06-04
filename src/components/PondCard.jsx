@@ -51,7 +51,9 @@ export default function PondCard({ pondState, onClick }) {
           width: 12, height: 12, borderRadius: '50%', background: color,
           boxShadow: `0 0 6px ${color}`,
         }} />
-        <span style={{ fontWeight: 600, color, fontSize: 15 }}>{pct.toFixed(1)}%</span>
+        <span style={{ fontWeight: 600, color, fontSize: 15 }}>
+          {pct != null ? `${pct.toFixed(1)}%` : '—'}
+        </span>
       </div>
 
       {/* ขนาดบ่อ กว้าง × ยาว × ลึก */}

@@ -6,7 +6,7 @@ import { usePondData } from './hooks/usePondData';
 
 // หน้าที่เป็นไปได้: 'home' | 'detail' | 'settings'
 export default function App() {
-  const { ponds, updatePond, setSensorDistance, getPondState } = usePondData();
+  const { ponds, updatePond, getPondState } = usePondData();
 
   const [page, setPage] = useState('home');          // หน้าปัจจุบัน
   const [selectedPondId, setSelectedPondId] = useState(null); // บ่อที่เลือก
@@ -51,7 +51,6 @@ export default function App() {
         pondId={selectedPondId}
         getPondState={getPondState}
         updatePond={updatePond}
-        setSensorDistance={setSensorDistance}
         onBack={backFromDetail}
         onOpenSettings={openSettings}
       />

@@ -3,8 +3,6 @@
     import Sparkline from '../components/Sparkline';
     import { getStatusColor } from '../utils/waterLevel';
 
-    const SENSOR_OFFSET = 30; // ระยะออฟเซ็ตของเซ็นเซอร์เหนือขอบบ่อ (ซม.)
-
     // กล่องสถิติขนาดเล็ก — label / value / unit
     function Stat({ label, value, unit, color }) {
       return (
@@ -20,17 +18,19 @@
       );
     }
 
-    // หน้ารายละเอียดบ่อ — ถังใหญ่, สถิติ, slider จำลอง, กราฟ
-    export default function PondDetailPage({ pondId, getPondState, updatePond, setSensorDistance, onBack, onOpenSettings }) {
+    // หน้ารายละเอียดบ่อ — ถังใหญ่, สถิติ, กราฟ
+    export default function PondDetailPage({ pondId, getPondState, updatePond, onBack, onOpenSettings }) {
       const state = getPondState(pondId);
       if (!state) return null; // ถ้าหาบ่อไม่เจอให้ render ว่าง
 
       const { pond, dist, waterHeight, pct, volume, status, history } = state;
       const color = getStatusColor(status);
 
-      // ขอบเขตของ slider เซ็นเซอร์ (min = น้ำเต็ม, max = น้ำว่าง)
-      const minDist = SENSOR_OFFSET;
-      const maxDist = pond.depth + SENSOR_OFFSET;
+      if (status === 'loading') return (
+        <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 18, color: '#64748b', fontWeight: 600 }}>กำลังรอข้อมูลจาก Firebase...</div>
+        </div>
+      );
 
       return (
         <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', padding: 24 }}>
@@ -105,32 +105,6 @@
                   <Stat label="Water Level"  value={pct.toFixed(1)}                       unit="%" color={color} />
                   <Stat label="Volume"       value={Math.max(0, volume).toFixed(0)}        unit="L" />
                   <Stat label="Sensor Dist"  value={dist.toFixed(1)}                       unit="cm" />
-                </div>
-
-                {/* Slider จำลองระยะเซ็นเซอร์ด้วยมือ */}
-                <div style={{
-                  background: '#fff', borderRadius: 12, padding: 16, border: '1.5px solid #e2e8f0',
-                }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 10 }}>
-                    Simulate Sensor Distance
-                  </div>
-                  <input
-                    type="range"
-                    min={minDist}
-                    max={maxDist}
-                    step={0.5}
-                    value={dist}
-                    onChange={e => setSensorDistance(pond.id, Number(e.target.value))}
-                    style={{ width: '100%', accentColor: color }}
-                  />
-                  {/* คำอธิบายขอบเขต slider */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
-                    <span>{minDist} cm (100% full)</span>
-                    <span>{maxDist} cm (0% full)</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 6 }}>
-                    Current sensor reading: <strong>{dist.toFixed(1)} cm</strong>
-                  </div>
                 </div>
 
                 {/* กราฟประวัติระดับน้ำ + ตารางรายละเอียด */}
