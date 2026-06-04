@@ -13,6 +13,26 @@ function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
 }
 
+function buildHourlyTicks(data) {
+  if (data.length < 2) return [];
+  const tMin = data[0].time;
+  const tMax = data[data.length - 1].time;
+  const rangeHours = (tMax - tMin) / 3_600_000;
+
+  // เลือก interval: 1h / 2h / 3h / 6h ตาม range
+  let step = 1;
+  if (rangeHours > 18) step = 6;
+  else if (rangeHours > 9) step = 3;
+  else if (rangeHours > 4) step = 2;
+
+  const stepMs = step * 3_600_000;
+  // จุดเริ่มต้น = ชั่วโมงถัดไปที่ตรงชั่วโมง
+  const firstTick = Math.ceil(tMin / stepMs) * stepMs;
+  const ticks = [];
+  for (let t = firstTick; t <= tMax; t += stepMs) ticks.push(t);
+  return ticks;
+}
+
 function toDateKey(year, month, day) {
   return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
@@ -224,10 +244,10 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
                         type="number"
                         scale="time"
                         domain={['dataMin', 'dataMax']}
+                        ticks={buildHourlyTicks(chartData)}
                         tickFormatter={fmtTime}
                         tick={{ fontSize: 9, fill: '#94a3b8' }}
-                        tickCount={5}
-                        minTickGap={40}
+                        minTickGap={36}
                       />
                       <YAxis
                         domain={[0, 100]}
