@@ -31,8 +31,3 @@ export function getStatusColor(status) {
   return '#22c55e';
 }
 
-// สุ่มค่าเดิน ±step เพื่อจำลองการเปลี่ยนแปลงของเซ็นเซอร์
-export function randomWalk(current, min, max, step = 2) {
-  const delta = (Math.random() - 0.5) * 2 * step;
-  return Math.min(max, Math.max(min, current + delta));
-}

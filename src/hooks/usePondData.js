@@ -24,9 +24,21 @@ function savePonds(ponds) {
   localStorage.setItem('water_monitor_ponds', JSON.stringify(ponds));
 }
 
+function loadSensorDistances() {
+  try {
+    const saved = localStorage.getItem('water_monitor_sensor_distances');
+    if (saved) return JSON.parse(saved);
+  } catch (_) {}
+  return {};
+}
+
+function saveSensorDistances(distances) {
+  localStorage.setItem('water_monitor_sensor_distances', JSON.stringify(distances));
+}
+
 export function usePondData() {
   const [ponds, setPonds] = useState(loadPonds);
-  const [sensorDistances, setSensorDistances] = useState({});
+  const [sensorDistances, setSensorDistances] = useState(loadSensorDistances);
   const [histories, setHistories] = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
   );
@@ -34,6 +46,10 @@ export function usePondData() {
   useEffect(() => {
     savePonds(ponds);
   }, [ponds]);
+
+  useEffect(() => {
+    saveSensorDistances(sensorDistances);
+  }, [sensorDistances]);
 
   // ดึงข้อมูลจาก Firebase real-time
   useEffect(() => {
