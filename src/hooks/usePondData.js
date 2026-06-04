@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ref, onValue } from 'firebase/database';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
 
-const SENSOR_OFFSET = 30;
 const HISTORY_SIZE = 20;
 
 const DEFAULT_PONDS = [
@@ -65,10 +64,6 @@ export function usePondData() {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   }, []);
 
-  const setSensorDistance = useCallback((id, dist) => {
-    setSensorDistances(prev => ({ ...prev, [id]: dist }));
-  }, []);
-
   const getPondState = useCallback((id) => {
     const pond = ponds.find(p => p.id === id);
     if (!pond) return null;
@@ -81,5 +76,5 @@ export function usePondData() {
     return { pond, dist, waterHeight, pct, volume, status, history: histories[id] || [] };
   }, [ponds, sensorDistances, histories]);
 
-  return { ponds, updatePond, setSensorDistance, getPondState };
+  return { ponds, updatePond, getPondState };
 }

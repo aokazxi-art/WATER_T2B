@@ -1,0 +1,10 @@
+{
+  "ponds": {
+    "pond_1": {
+      "last_reading": {
+        "raw_cm": 100,
+        "timestamp": 1700000000000
+      }
+    }
+  }
+}
