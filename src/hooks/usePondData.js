@@ -10,7 +10,7 @@ const REGISTRY = 'pond_registry'; // source of truth ข้ามเครื่
 const DEFAULT_FIELDS = {
   depth: 100, area: 10000, sensorOffset: 30,
   thresholdYellow: 70, thresholdRed: 80,
-  deviceId: '', gatewayId: null,
+  deviceId: '', gatewayId: null, sensorModel: '',
 };
 
 // area หน่วย ซม², depth หน่วย ซม., sensorOffset หน่วย ซม.

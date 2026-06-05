@@ -1,0 +1,12 @@
+{
+  "mqtt": {
+    "host": "YOUR_CHIRPSTACK_HOST",
+    "port": 1883,
+    "appId": "YOUR_APP_ID",
+    "username": "",
+    "password": ""
+  },
+  "firebase": {
+    "databaseURL": "https://gen-lang-client-0103823618-default-rtdb.asia-southeast1.firebasedatabase.app"
+  }
+}

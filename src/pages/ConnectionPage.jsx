@@ -163,13 +163,19 @@ function FormFooter({ onCancel, onSubmit, submitLabel }) {
 // ─── Gateway card ─────────────────────────────────────────────────────────────
 
 function GatewayCard({ gateway, onRemove, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const [draftName, setDraftName] = useState(gateway.name);
-  const [draftHost, setDraftHost] = useState(gateway.host ?? '');
+  const [editing,       setEditing]       = useState(false);
+  const [draftName,     setDraftName]     = useState(gateway.name);
+  const [draftHost,     setDraftHost]     = useState(gateway.host ?? '');
+  const [draftAppId,    setDraftAppId]    = useState(gateway.appId ?? '');
+  const [draftMqttPort, setDraftMqttPort] = useState(String(gateway.mqttPort ?? 1883));
 
   function handleSave() {
     if (!draftName.trim()) return;
-    onUpdate({ ...gateway, name: draftName.trim(), host: draftHost.trim() });
+    onUpdate({
+      ...gateway,
+      name: draftName.trim(), host: draftHost.trim(),
+      appId: draftAppId.trim(), mqttPort: Number(draftMqttPort) || 1883,
+    });
     setEditing(false);
   }
 
@@ -180,8 +186,31 @@ function GatewayCard({ gateway, onRemove, onUpdate }) {
         padding: 14, marginBottom: 8, display: 'flex', flexDirection: 'column', gap: 8,
       }}>
         <TextInput label="ชื่อ Gateway" placeholder="เช่น GW-Building-A" value={draftName} onChange={setDraftName} />
-        <TextInput label="Host / IP (ไม่บังคับ)" placeholder="เช่น 192.168.1.1" value={draftHost} onChange={setDraftHost} mono />
-        <FormFooter onCancel={() => { setDraftName(gateway.name); setDraftHost(gateway.host ?? ''); setEditing(false); }} onSubmit={handleSave} submitLabel="บันทึก" />
+        <TextInput label="Host / IP ของ ChirpStack" placeholder="เช่น 192.168.1.100" value={draftHost} onChange={setDraftHost} mono />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8 }}>
+          <TextInput label="ChirpStack App ID" placeholder="เช่น 1 หรือ abc-uuid" value={draftAppId} onChange={setDraftAppId} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MQTT Port</span>
+            <input
+              type="number"
+              value={draftMqttPort}
+              onChange={e => setDraftMqttPort(e.target.value)}
+              style={{
+                padding: '7px 10px', borderRadius: 8, border: '1.5px solid #cbd5e1',
+                fontSize: 13, outline: 'none', boxSizing: 'border-box', width: '100%',
+              }}
+            />
+          </div>
+        </div>
+        <FormFooter
+          onCancel={() => {
+            setDraftName(gateway.name); setDraftHost(gateway.host ?? '');
+            setDraftAppId(gateway.appId ?? ''); setDraftMqttPort(String(gateway.mqttPort ?? 1883));
+            setEditing(false);
+          }}
+          onSubmit={handleSave}
+          submitLabel="บันทึก"
+        />
       </div>
     );
   }
@@ -193,7 +222,17 @@ function GatewayCard({ gateway, onRemove, onUpdate }) {
     }}>
       <div style={{ flex: 1 }}>
         <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{gateway.name}</span>
-        {gateway.host && <code style={{ marginLeft: 10, fontSize: 11, color: '#64748b' }}>{gateway.host}</code>}
+        {gateway.host && (
+          <code style={{ marginLeft: 10, fontSize: 11, color: '#64748b' }}>
+            {gateway.host}:{gateway.mqttPort ?? 1883}
+          </code>
+        )}
+        {gateway.appId && (
+          <span style={{
+            marginLeft: 8, fontSize: 11, color: '#0369a1',
+            background: '#e0f2fe', padding: '1px 7px', borderRadius: 6,
+          }}>App: {gateway.appId}</span>
+        )}
       </div>
       <IconBtn onClick={() => setEditing(true)} title="แก้ไขชื่อ" icon="✎" color="#0ea5e9" borderColor="#bae6fd" />
       <IconBtn onClick={onRemove} title="ลบ" icon="✕" color="#ef4444" borderColor="#fca5a5" />
@@ -303,6 +342,33 @@ function SensorCard({ pond, meta, gateways, onRemove, updatePond }) {
           >{euiSaved ? 'Saved ✓' : 'Save'}</button>
         </div>
       </div>
+
+      {/* Row 5: Sensor Model */}
+      <div style={{ marginTop: 10 }}>
+        <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, marginBottom: 4 }}>Sensor Model</div>
+        <select
+          value={pond.sensorModel ?? ''}
+          onChange={e => updatePond(pond.id, { sensorModel: e.target.value })}
+          style={{
+            padding: '7px 10px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+            fontSize: 12, background: '#fff', color: '#334155', outline: 'none',
+            width: '100%', boxSizing: 'border-box', cursor: 'pointer',
+          }}
+        >
+          <option value="">Generic / Other</option>
+          <option value="milesight-em500-udl">Milesight EM500-UDL</option>
+        </select>
+        {pond.sensorModel === 'milesight-em500-udl' && (
+          <div style={{
+            marginTop: 6, fontSize: 11, color: '#0369a1',
+            background: '#e0f2fe', borderRadius: 6, padding: '6px 10px',
+            fontFamily: 'monospace', lineHeight: 1.8,
+          }}>
+            FF 0B &lt;battery%&gt; | 01 82 &lt;dist_mm uint16LE&gt;<br />
+            เช่น: <strong>01 4C 02</strong> → 588 mm → 58.8 cm
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -310,8 +376,10 @@ function SensorCard({ pond, meta, gateways, onRemove, updatePond }) {
 // ─── Add forms ────────────────────────────────────────────────────────────────
 
 function AddGatewayForm({ onCancel, onSubmit }) {
-  const [name, setName] = useState('');
-  const [host, setHost] = useState('');
+  const [name,     setName]     = useState('');
+  const [host,     setHost]     = useState('');
+  const [appId,    setAppId]    = useState('');
+  const [mqttPort, setMqttPort] = useState('1883');
   return (
     <div style={{
       background: '#f0f9ff', border: '1.5px dashed #38bdf8', borderRadius: 12,
@@ -319,8 +387,27 @@ function AddGatewayForm({ onCancel, onSubmit }) {
     }}>
       <div style={{ fontWeight: 700, fontSize: 13, color: '#0369a1' }}>เพิ่ม Gateway ใหม่</div>
       <TextInput label="ชื่อ Gateway" placeholder="เช่น GW-Building-A" value={name} onChange={setName} />
-      <TextInput label="Host / IP (ไม่บังคับ)" placeholder="เช่น 192.168.1.1" value={host} onChange={setHost} mono />
-      <FormFooter onCancel={onCancel} onSubmit={() => onSubmit(name, host)} submitLabel="เพิ่ม Gateway" />
+      <TextInput label="Host / IP ของ ChirpStack" placeholder="เช่น 192.168.1.100" value={host} onChange={setHost} mono />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: 8 }}>
+        <TextInput label="ChirpStack App ID" placeholder="เช่น 1 หรือ abc-uuid" value={appId} onChange={setAppId} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>MQTT Port</span>
+          <input
+            type="number"
+            value={mqttPort}
+            onChange={e => setMqttPort(e.target.value)}
+            style={{
+              padding: '7px 10px', borderRadius: 8, border: '1.5px solid #cbd5e1',
+              fontSize: 13, outline: 'none', boxSizing: 'border-box', width: '100%',
+            }}
+          />
+        </div>
+      </div>
+      <FormFooter
+        onCancel={onCancel}
+        onSubmit={() => onSubmit(name, host, appId, Number(mqttPort) || 1883)}
+        submitLabel="เพิ่ม Gateway"
+      />
     </div>
   );
 }
@@ -366,10 +453,13 @@ export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack,
     persistGateways(updated);
   }
 
-  function handleAddGateway(name, host) {
+  function handleAddGateway(name, host, appId, mqttPort) {
     if (!name.trim()) return;
     const nextId = Math.max(0, ...gateways.map(g => g.id), 0) + 1;
-    saveGateways([...gateways, { id: nextId, name: name.trim(), host: host.trim() }]);
+    saveGateways([...gateways, {
+      id: nextId, name: name.trim(), host: host.trim(),
+      appId: (appId ?? '').trim(), mqttPort: mqttPort || 1883,
+    }]);
     setAddingGW(false);
   }
 
