@@ -4,6 +4,7 @@ import PondDetailPage from './pages/PondDetailPage';
 import PondSettingsPage from './pages/PondSettingsPage';
 import ConnectionPage from './pages/ConnectionPage';
 import LoginPage from './pages/LoginPage';
+import DevPage from './pages/DevPage';
 import { usePondData } from './hooks/usePondData';
 import { loadSession, clearSession } from './auth/auth';
 
@@ -25,6 +26,15 @@ export default function App() {
   function backFromDetail()  { setSelectedPondId(null); setPage('home'); }
 
   if (!user) return <LoginPage onLogin={handleLogin} />;
+
+  if (page === 'dev' && isAdmin) {
+    return (
+      <DevPage
+        ponds={ponds}
+        onBack={() => setPage('home')}
+      />
+    );
+  }
 
   if (page === 'connection' && isAdmin) {
     return (
@@ -77,6 +87,7 @@ export default function App() {
       isConnected={isConnected}
       onSelectPond={openDetail}
       onOpenConnection={isAdmin ? () => setPage('connection') : null}
+      onOpenDev={isAdmin ? () => setPage('dev') : null}
       user={user}
       onLogout={handleLogout}
     />

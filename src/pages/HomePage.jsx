@@ -1,6 +1,6 @@
 import PondCard from '../components/PondCard';
 
-export default function HomePage({ ponds, getPondState, isConnected, onSelectPond, onOpenConnection, user, onLogout }) {
+export default function HomePage({ ponds, getPondState, isConnected, onSelectPond, onOpenConnection, onOpenDev, user, onLogout }) {
   return (
     <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
 
@@ -39,6 +39,9 @@ export default function HomePage({ ponds, getPondState, isConnected, onSelectPon
 
           {onOpenConnection && (
             <button onClick={onOpenConnection} style={navBtnStyle}>Devices</button>
+          )}
+          {onOpenDev && (
+            <button onClick={onOpenDev} style={navBtnStyle}>Dev</button>
           )}
           <button onClick={onLogout} style={navBtnStyle}>ออกจากระบบ</button>
         </div>

@@ -5,9 +5,11 @@ import StatusBadge from '../components/StatusBadge';
 import { getStatusColor } from '../utils/waterLevel';
 import { loadDailyHistoryAsync } from '../hooks/usePondData';
 
-const DAYS_TH   = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
-const MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
-                   'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const DAYS_TH        = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
+const MONTHS_TH      = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                        'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+const MONTHS_TH_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.',
+                          'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 function fmtTime(ts) {
   return new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
@@ -77,10 +79,12 @@ function Stat({ label, value, unit, color, minWidth = 110 }) {
 
 export default function PondDetailPage({ pondId, getPondState, updatePond, onBack, onOpenSettings, user, onLogout }) {
   const today = new Date();
-  const [viewYear,   setViewYear]   = useState(today.getFullYear());
-  const [viewMonth,  setViewMonth]  = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [dailyData,  setDailyData]  = useState([]);
+  const [viewYear,        setViewYear]        = useState(today.getFullYear());
+  const [viewMonth,       setViewMonth]       = useState(today.getMonth());
+  const [selectedDate,    setSelectedDate]    = useState(today);
+  const [dailyData,       setDailyData]       = useState([]);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [pickerYear,      setPickerYear]      = useState(today.getFullYear());
 
   const state = getPondState(pondId);
 
@@ -310,19 +314,86 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
               </div>
 
               {/* Calendar */}
-              <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #f1f5f9', marginTop: 4 }}>
+              <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #f1f5f9', marginTop: 4, position: 'relative' }}>
                 {/* Month navigation */}
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
                   <button onClick={prevMonth} style={navBtn}>‹</button>
-                  <span style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+
+                  {/* Clickable month/year label → opens picker */}
+                  <button
+                    onClick={() => { setPickerYear(viewYear); setShowMonthPicker(v => !v); }}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 700, color: '#0f172a', padding: '2px 4px', borderRadius: 5,
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}
+                  >
                     {MONTHS_TH[viewMonth]} {viewYear + 543}
-                  </span>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+
                   <button
                     onClick={nextMonth}
                     disabled={isNextDisabled}
                     style={{ ...navBtn, color: isNextDisabled ? '#cbd5e1' : '#475569', cursor: isNextDisabled ? 'default' : 'pointer' }}
                   >›</button>
                 </div>
+
+                {/* Month/Year picker dropdown */}
+                {showMonthPicker && (
+                  <>
+                    <div onClick={() => setShowMonthPicker(false)}
+                      style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+                    <div style={{
+                      position: 'absolute', top: 34, left: 0, right: 0, zIndex: 20,
+                      background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10,
+                      boxShadow: '0 4px 20px rgba(0,0,0,.12)', padding: '12px 12px 10px',
+                    }}>
+                      {/* Year navigation */}
+                      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
+                        <button onClick={() => setPickerYear(y => y - 1)} style={navBtn}>‹</button>
+                        <span style={{ flex: 1, textAlign: 'center', fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+                          {pickerYear + 543}
+                        </span>
+                        <button
+                          onClick={() => setPickerYear(y => Math.min(y + 1, today.getFullYear()))}
+                          disabled={pickerYear >= today.getFullYear()}
+                          style={{ ...navBtn, color: pickerYear >= today.getFullYear() ? '#cbd5e1' : '#475569', cursor: pickerYear >= today.getFullYear() ? 'default' : 'pointer' }}
+                        >›</button>
+                      </div>
+
+                      {/* Month grid 4×3 */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 3 }}>
+                        {MONTHS_TH_SHORT.map((name, i) => {
+                          const isFuture = pickerYear > today.getFullYear() ||
+                            (pickerYear === today.getFullYear() && i > today.getMonth());
+                          const isActive = pickerYear === viewYear && i === viewMonth;
+                          return (
+                            <button
+                              key={i}
+                              disabled={isFuture}
+                              onClick={() => { setViewYear(pickerYear); setViewMonth(i); setShowMonthPicker(false); }}
+                              style={{
+                                padding: '7px 2px', borderRadius: 6, border: 'none',
+                                cursor: isFuture ? 'default' : 'pointer',
+                                fontSize: 11, fontWeight: isActive ? 600 : 400,
+                                background: isActive ? color : 'transparent',
+                                color: isFuture ? '#d1d5db' : isActive ? '#fff' : '#374151',
+                                transition: 'background .1s',
+                              }}
+                              onMouseEnter={e => { if (!isFuture && !isActive) e.currentTarget.style.background = '#f1f5f9'; }}
+                              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+                            >{name}</button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Day name headers */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, marginBottom: 2 }}>
