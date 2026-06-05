@@ -57,15 +57,19 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-function Stat({ label, value, unit, color, minWidth = 120 }) {
+function Stat({ label, value, unit, color, minWidth = 110 }) {
   return (
     <div style={{
-      background: '#fff', borderRadius: 12, padding: '14px 18px',
-      border: '1.5px solid #e2e8f0', flex: 1, minWidth,
+      background: '#fff', borderRadius: 8, padding: '12px 14px',
+      border: '1px solid #e2e8f0', flex: 1, minWidth,
     }}>
-      <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color || '#1e293b', whiteSpace: 'nowrap' }}>
-        {value}<span style={{ fontSize: 13, fontWeight: 500, color: '#94a3b8', marginLeft: 3 }}>{unit}</span>
+      <div style={{
+        fontSize: 10, color: '#94a3b8', fontWeight: 500, marginBottom: 5,
+        textTransform: 'uppercase', letterSpacing: '0.05em',
+      }}>{label}</div>
+      <div style={{ fontSize: 19, fontWeight: 700, color: color || '#0f172a', whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+        {value}
+        {unit && <span style={{ fontSize: 12, fontWeight: 400, color: '#94a3b8', marginLeft: 3 }}>{unit}</span>}
       </div>
     </div>
   );
@@ -127,69 +131,62 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
   const dMax = dailyData.length ? Math.max(...dailyData.map(x => x.pct)).toFixed(1) : null;
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', padding: 24 }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
-          <button onClick={onBack} style={{
-            background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
-            padding: '8px 16px', cursor: 'pointer', fontWeight: 600, color: '#475569', fontSize: 14,
-          }}>← Back</button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{pond.name}</h2>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-              พื้นที่ {(pond.area / 10000).toFixed(2)} ม² | ลึก {pond.depth} ซม. | เซนเซอร์ห่างขอบ {pond.sensorOffset} ซม.
-            </div>
-          </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+      {/* Navbar */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid #e2e8f0',
+        padding: '0 24px', height: 52,
+        display: 'flex', alignItems: 'center', gap: 12,
+        position: 'sticky', top: 0, zIndex: 10,
+      }}>
+        <button onClick={onBack} style={{
+          display: 'flex', alignItems: 'center', gap: 4,
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontSize: 13, fontWeight: 500, color: '#64748b', padding: '4px 0',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          กลับ
+        </button>
+
+        <div style={{ width: 1, height: 18, background: '#e2e8f0' }} />
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 15, fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {pond.name}
+            </span>
             <StatusBadge status={status} />
-
-            {/* ปุ่ม Settings — แสดงเฉพาะ admin */}
-            {onOpenSettings && (
-              <button
-                onClick={onOpenSettings}
-                title="Settings"
-                style={{
-                  background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
-                  width: 38, height: 38, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#64748b', transition: 'background .15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-              </button>
-            )}
-
-            {/* ปุ่ม Logout */}
-            <button
-              onClick={onLogout}
-              title="ออกจากระบบ"
-              style={{
-                background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
-                padding: '0 12px', height: 38, cursor: 'pointer',
-                fontSize: 12, fontWeight: 600, color: '#ef4444',
-                transition: 'background .15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
-            >ออก</button>
+          </div>
+          <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>
+            {(pond.area / 10000).toFixed(2)} ม²  ·  ลึก {pond.depth} ซม.  ·  เซนเซอร์ {pond.sensorOffset} ซม.
           </div>
         </div>
 
-        {/* Main layout */}
-        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {onOpenSettings && (
+            <button onClick={onOpenSettings} title="Settings" style={iconBtnStyle}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </button>
+          )}
+          <button onClick={onLogout} style={{ ...iconBtnStyle, fontSize: 12, padding: '5px 10px', color: '#64748b' }}>ออก</button>
+        </div>
+      </div>
+
+      {/* Page content */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '24px' }}>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'flex-start' }}>
 
           {/* Tank gauge */}
           <div style={{
-            background: '#fff', borderRadius: 16, padding: 28,
-            border: `2px solid ${color}44`, boxShadow: `0 4px 20px ${color}22`,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
+            background: '#fff', borderRadius: 10, padding: '20px 16px',
+            border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,.05)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
             flex: '0 0 auto',
           }}>
             <TankGauge
@@ -204,10 +201,10 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
           </div>
 
           {/* Right column */}
-          <div style={{ flex: 1, minWidth: 280, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ flex: 1, minWidth: 260, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
             {/* Stats */}
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Stat label="ระดับน้ำ"     value={pct      != null ? pct.toFixed(1)                                                                                     : '—'} unit="%" color={color} />
               <Stat label="ความสูงน้ำ"   value={waterHeight != null ? Math.max(0, waterHeight).toFixed(1)                                                     : '—'} unit="ซม." />
               <Stat label="ปริมาณน้ำ"    value={volume   != null ? Math.max(0, volume).toLocaleString('en-US', { maximumFractionDigits: 0 })                  : '—'} unit="ลิตร" minWidth={170} />
@@ -215,8 +212,8 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
               <Stat label="ระยะเซนเซอร์" value={dist     != null ? dist.toFixed(1)                                                                            : '—'} unit="ซม." />
             </div>
 
-            {/* Level History — chart + calendar */}
-            <div style={{ background: '#fff', borderRadius: 12, border: '1.5px solid #e2e8f0', overflow: 'hidden' }}>
+            {/* Level History */}
+            <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,.05)' }}>
 
               {/* Header */}
               <div style={{
@@ -385,25 +382,19 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
               </div>
             </div>
 
-            {/* MQTT box */}
-            <div style={{
-              background: '#f1f5f9', borderRadius: 12, padding: 14, border: '1.5px solid #e2e8f0',
-              fontSize: 12, color: '#64748b',
-            }}>
-              <div style={{ fontWeight: 700, color: '#475569', marginBottom: 6 }}>MQTT Data Source (future)</div>
-              <code style={{ display: 'block', background: '#e2e8f0', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#1e293b', wordBreak: 'break-all' }}>
-                application/&#123;appId&#125;/device/&#123;devEui&#125;/event/up
-              </code>
-              <div style={{ marginTop: 6 }}>Payload field: <code>object.distance</code></div>
-            </div>
-
           </div>
         </div>
-
       </div>
     </div>
   );
 }
+
+const iconBtnStyle = {
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: '#fff', border: '1px solid #e2e8f0', borderRadius: 7,
+  width: 32, height: 32, cursor: 'pointer', color: '#475569',
+  padding: 0,
+};
 
 const navBtn = {
   background: 'none', border: 'none', cursor: 'pointer',

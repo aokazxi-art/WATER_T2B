@@ -213,16 +213,17 @@ export function usePondData() {
   }, []);
 
   const getPondState = useCallback((id) => {
-    const pond = ponds.find(p => p.id === id);
+    const pond    = ponds.find(p => p.id === id);
     if (!pond) return null;
-    const dist = sensorDistances[id];
-    if (dist == null) return { pond, dist: null, waterHeight: null, pct: null, volume: null, status: 'loading', history: histories[id] || [] };
+    const battery = sensorMeta[id]?.battery ?? null;
+    const dist    = sensorDistances[id];
+    if (dist == null) return { pond, dist: null, waterHeight: null, pct: null, volume: null, status: 'loading', battery, history: histories[id] || [] };
     const waterHeight = calcWaterHeight(dist, pond.depth, pond.sensorOffset);
     const pct    = calcWaterPercent(waterHeight, pond.depth);
     const volume = calcVolumeLiters(pond.area, waterHeight);
     const status = getStatus(pct, pond.thresholdYellow, pond.thresholdRed);
-    return { pond, dist, waterHeight, pct, volume, status, history: histories[id] || [] };
-  }, [ponds, sensorDistances, histories]);
+    return { pond, dist, waterHeight, pct, volume, status, battery, history: histories[id] || [] };
+  }, [ponds, sensorDistances, sensorMeta, histories]);
 
   return { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected };
 }

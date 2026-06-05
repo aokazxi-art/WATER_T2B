@@ -8,8 +8,8 @@ const PADDING_AXIS = 40; // ระยะซ้ายพิเศษสำหร�
 export default function TankGauge({ pondWidth, pondDepth, fillPercent, status, id, size = 'large' }) {
   const isLarge = size === 'large';
   // กำหนดขนาด canvas สูงสุดตาม size
-  const maxW = isLarge ? 280 : 120;
-  const maxH = isLarge ? 320 : 130;
+  const maxW = isLarge ? 180 : 110;
+  const maxH = isLarge ? 200 : 120;
 
   // คำนวณขนาดถังให้ได้สัดส่วนจริง แต่ไม่เกิน maxW × maxH
   const aspect = pondWidth / pondDepth;

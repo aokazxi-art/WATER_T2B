@@ -480,39 +480,47 @@ export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack,
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', padding: 24 }}>
-      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28 }}>
-          <button onClick={onBack} style={{
-            background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
-            padding: '8px 16px', cursor: 'pointer', fontWeight: 600, color: '#475569', fontSize: 14,
-          }}>← Back</button>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800, color: '#0f172a' }}>Device Connections</h2>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Firebase · Gateways · Sensors</div>
-          </div>
+      {/* Navbar */}
+      <div style={{
+        background: '#fff', borderBottom: '1px solid #e2e8f0',
+        padding: '0 24px', height: 52,
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 0,
+      }}>
+        <button onClick={onBack} style={{
+          display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none',
+          cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#64748b', padding: '4px 0',
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          กลับ
+        </button>
+        <div style={{ width: 1, height: 18, background: '#e2e8f0' }} />
+        <div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>Device Connections</div>
+          <div style={{ fontSize: 11, color: '#94a3b8' }}>Firebase · Gateways · Sensors</div>
         </div>
+      </div>
+
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: 24 }}>
 
         {/* Firebase connection */}
         <div style={{
-          background: '#fff', borderRadius: 16, padding: 20, marginBottom: 8,
-          border: isConnected ? '2px solid #86efac' : '2px solid #fca5a5',
-          boxShadow: '0 2px 12px #0001',
+          background: '#fff', borderRadius: 10, padding: '14px 18px', marginBottom: 8,
+          border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,.05)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <div style={{
-              width: 12, height: 12, borderRadius: '50%',
-              background: isConnected ? '#22c55e' : '#ef4444',
-              boxShadow: `0 0 8px ${isConnected ? '#22c55e' : '#ef4444'}`,
+              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+              background: isConnected ? '#16a34a' : '#dc2626',
             }} />
-            <span style={{ fontWeight: 700, fontSize: 16, color: '#0f172a', flex: 1 }}>Firebase Realtime Database</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', flex: 1 }}>Firebase Realtime Database</span>
             <span style={{
-              fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+              fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4,
               background: isConnected ? '#f0fdf4' : '#fef2f2',
-              color: isConnected ? '#22c55e' : '#ef4444',
-              border: `1px solid ${isConnected ? '#86efac' : '#fca5a5'}`,
+              color: isConnected ? '#16a34a' : '#dc2626',
             }}>{isConnected ? 'Connected' : 'Disconnected'}</span>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#64748b' }}>

@@ -1,30 +1,25 @@
-import { useEffect, useRef } from 'react';
-
-// สีและ label ของแต่ละสถานะ
 const CONFIG = {
-  normal:  { label: 'Normal',    bg: '#dcfce7', text: '#166534', dot: '#22c55e' },
-  warning: { label: 'Warning',   bg: '#fef9c3', text: '#854d0e', dot: '#f59e0b' },
-  danger:  { label: 'Danger',    bg: '#fee2e2', text: '#991b1b', dot: '#ef4444' },
-  loading: { label: 'รอข้อมูล', bg: '#f1f5f9', text: '#64748b', dot: '#94a3b8' },
+  normal:  { label: 'Normal',    bg: '#f0fdf4', text: '#16a34a', dot: '#16a34a' },
+  warning: { label: 'Warning',   bg: '#fffbeb', text: '#b45309', dot: '#d97706' },
+  danger:  { label: 'Danger',    bg: '#fef2f2', text: '#dc2626', dot: '#dc2626' },
+  loading: { label: 'รอข้อมูล', bg: '#f8fafc', text: '#64748b', dot: '#cbd5e1' },
 };
 
-// badge แสดงสถานะพร้อมจุดสี (จุดกะพริบเมื่อ danger)
 export default function StatusBadge({ status }) {
   const { label, bg, text, dot } = CONFIG[status] || CONFIG.normal;
-  const blinking = status === 'danger'; // เปิด animation กะพริบเฉพาะ danger
+  const blinking = status === 'danger';
 
   return (
     <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 6,
+      display: 'inline-flex', alignItems: 'center', gap: 5,
       background: bg, color: text,
-      padding: '4px 12px', borderRadius: 999,
-      fontWeight: 600, fontSize: 13,
+      padding: '3px 8px', borderRadius: 4,
+      fontWeight: 500, fontSize: 12,
     }}>
-      {/* จุดสีสถานะ — กะพริบเมื่อ danger */}
       <span style={{
-        width: 8, height: 8, borderRadius: '50%', background: dot,
+        width: 6, height: 6, borderRadius: '50%', background: dot,
+        display: 'inline-block', flexShrink: 0,
         animation: blinking ? 'blink 1s step-start infinite' : 'none',
-        display: 'inline-block',
       }} />
       {label}
     </span>
