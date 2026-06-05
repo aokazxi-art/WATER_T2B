@@ -16,16 +16,6 @@ export default function HomePage({ ponds, getPondState, isConnected, onSelectPon
 
           {/* ปุ่มขวาบน */}
           <div style={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: 8, alignItems: 'center' }}>
-            {/* บทบาทผู้ใช้ */}
-            <span style={{
-              fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 8,
-              background: user?.role === 'admin' ? '#eff6ff' : '#f8fafc',
-              color: user?.role === 'admin' ? '#1d4ed8' : '#64748b',
-              border: `1px solid ${user?.role === 'admin' ? '#bfdbfe' : '#e2e8f0'}`,
-            }}>
-              {user?.displayName}
-            </span>
-
             {/* ปุ่ม Devices — แสดงเฉพาะ admin */}
             {onOpenConnection && (
               <button
