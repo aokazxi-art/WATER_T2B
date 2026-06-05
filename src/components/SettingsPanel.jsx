@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 function Field({ label, value, onChange, min, max, step, unit }) {
   return (
@@ -67,6 +67,100 @@ function DepthField({ depthCm, onChangeCm }) {
   );
 }
 
+// ใส่ลูกน้ำทุก 3 หลักในส่วนจำนวนเต็ม (รองรับทศนิยม)
+function addCommas(m2) {
+  const [intPart = '', decPart] = m2.toString().split('.');
+  const formatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return decPart !== undefined ? `${formatted}.${decPart}` : formatted;
+}
+
+// Input พื้นที่หน้าตัดบ่อ: type="text", format ลูกน้ำ realtime, เก็บ ซม² ภายใน
+function AreaField({ areaCm2, onChangeCm2 }) {
+  const inputRef = useRef(null);
+  const [text, setText] = useState(() => addCommas(areaCm2 / 10000));
+
+  // sync เมื่อ areaCm2 เปลี่ยนจากภายนอก (เช่น กด Reset)
+  // tolerance 0.001 ม² ป้องกัน loop จากการพิมพ์เอง (เช่น "12." → parsed 12 → m2=12 → ไม่ reset)
+  useEffect(() => {
+    const m2 = areaCm2 / 10000;
+    const currentNum = parseFloat(text.replace(/,/g, ''));
+    if (isNaN(currentNum) || Math.abs(currentNum - m2) > 0.001) {
+      setText(addCommas(m2));
+    }
+  }, [areaCm2]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleChange(e) {
+    const el = e.target;
+    const raw = el.value;
+    const pos = el.selectionStart;
+
+    // นับลูกน้ำก่อน cursor เพื่อ restore cursor หลัง reformat
+    let commasBefore = 0;
+    for (let i = 0; i < pos; i++) {
+      if (raw[i] === ',') commasBefore++;
+    }
+    const digitPosBefore = pos - commasBefore;
+
+    // กรองเฉพาะตัวเลขและจุดทศนิยม (จุดเดียว)
+    const stripped = raw.replace(/[^\d.]/g, '');
+    const dotIdx = stripped.indexOf('.');
+    const sanitized = dotIdx === -1
+      ? stripped
+      : stripped.slice(0, dotIdx + 1) + stripped.slice(dotIdx + 1).replace(/\./g, '');
+
+    // format integer part ด้วยลูกน้ำ
+    const [intStr = '', decStr] = sanitized.split('.');
+    const newText = decStr !== undefined
+      ? `${intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${decStr}`
+      : intStr.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+    setText(newText);
+
+    // อัปเดตค่า ซม²
+    const num = parseFloat(sanitized);
+    if (!isNaN(num) && num > 0) onChangeCm2(num * 10000);
+
+    // คืน cursor position ให้ถูกต้องหลัง comma ถูกเพิ่ม/ลบ
+    requestAnimationFrame(() => {
+      if (!inputRef.current) return;
+      let newPos;
+      if (digitPosBefore === 0) {
+        newPos = 0;
+      } else {
+        let seen = 0;
+        newPos = newText.length; // fallback: ท้ายสุด
+        for (let i = 0; i < newText.length; i++) {
+          if (newText[i] !== ',') {
+            seen++;
+            if (seen === digitPosBefore) { newPos = i + 1; break; }
+          }
+        }
+      }
+      inputRef.current.setSelectionRange(newPos, newPos);
+    });
+  }
+
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+      <span style={{ color: '#64748b', fontWeight: 600 }}>พื้นที่หน้าตัดบ่อ</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          ref={inputRef}
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={handleChange}
+          style={{
+            padding: '6px 10px', borderRadius: 8, border: '1.5px solid #cbd5e1',
+            fontSize: 14, width: '100%', outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+        <span style={{ color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>ม²</span>
+      </div>
+    </label>
+  );
+}
+
 export default function SettingsPanel({ pond, onUpdate }) {
   const [local, setLocal] = useState({ ...pond });
   const changed = JSON.stringify(local) !== JSON.stringify(pond);
@@ -74,9 +168,6 @@ export default function SettingsPanel({ pond, onUpdate }) {
   const set = (key) => (val) => setLocal(prev => ({ ...prev, [key]: val }));
   const apply = () => onUpdate(local);
   const reset = () => setLocal({ ...pond });
-
-  // แสดง area เป็น ม² (input) → เก็บเป็น ซม² ใน local.area
-  const areaM2 = +(local.area / 10000).toFixed(4);
 
   return (
     <div style={{
@@ -87,14 +178,10 @@ export default function SettingsPanel({ pond, onUpdate }) {
 
       <Field label="Pond Name" value={local.name} onChange={set('name')} />
 
-      {/* พื้นที่หน้าตัดบ่อ: ผู้ใช้กรอก ม², เก็บ ซม² */}
-      <Field
-        label="พื้นที่หน้าตัดบ่อ"
-        value={areaM2}
-        onChange={(v) => setLocal(prev => ({ ...prev, area: v * 10000 }))}
-        min={0.01}
-        step={0.01}
-        unit="ม²"
+      {/* พื้นที่หน้าตัดบ่อ: type=text, format ลูกน้ำ, เก็บ ซม² */}
+      <AreaField
+        areaCm2={local.area}
+        onChangeCm2={(v) => setLocal(prev => ({ ...prev, area: v }))}
       />
 
       {/* ความลึกบ่อ: toggle ซม./ม., เก็บ ซม. */}
