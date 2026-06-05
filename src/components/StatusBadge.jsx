@@ -2,9 +2,10 @@ import { useEffect, useRef } from 'react';
 
 // สีและ label ของแต่ละสถานะ
 const CONFIG = {
-  normal:  { label: 'Normal',  bg: '#dcfce7', text: '#166534', dot: '#22c55e' },
-  warning: { label: 'Warning', bg: '#fef9c3', text: '#854d0e', dot: '#f59e0b' },
-  danger:  { label: 'Danger',  bg: '#fee2e2', text: '#991b1b', dot: '#ef4444' },
+  normal:  { label: 'Normal',    bg: '#dcfce7', text: '#166534', dot: '#22c55e' },
+  warning: { label: 'Warning',   bg: '#fef9c3', text: '#854d0e', dot: '#f59e0b' },
+  danger:  { label: 'Danger',    bg: '#fee2e2', text: '#991b1b', dot: '#ef4444' },
+  loading: { label: 'รอข้อมูล', bg: '#f1f5f9', text: '#64748b', dot: '#94a3b8' },
 };
 
 // badge แสดงสถานะพร้อมจุดสี (จุดกะพริบเมื่อ danger)

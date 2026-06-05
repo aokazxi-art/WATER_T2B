@@ -71,7 +71,7 @@ function Stat({ label, value, unit, color, minWidth = 120 }) {
   );
 }
 
-export default function PondDetailPage({ pondId, getPondState, updatePond, onBack, onOpenSettings }) {
+export default function PondDetailPage({ pondId, getPondState, updatePond, onBack, onOpenSettings, user, onLogout }) {
   const today = new Date();
   const [viewYear,   setViewYear]   = useState(today.getFullYear());
   const [viewMonth,  setViewMonth]  = useState(today.getMonth());
@@ -97,12 +97,6 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
   if (!state) return null;
   const { pond, dist, waterHeight, pct, volume, status, history } = state;
   const color = getStatusColor(status);
-
-  if (status === 'loading') return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #e0f2fe 0%, #f0fdf4 100%)', padding: 24, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ fontSize: 18, color: '#64748b', fontWeight: 600 }}>กำลังรอข้อมูลจาก Firebase...</div>
-    </div>
-  );
 
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -148,25 +142,43 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
               พื้นที่ {(pond.area / 10000).toFixed(2)} ม² | ลึก {pond.depth} ซม. | เซนเซอร์ห่างขอบ {pond.sensorOffset} ซม.
             </div>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
             <StatusBadge status={status} />
+
+            {/* ปุ่ม Settings — แสดงเฉพาะ admin */}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                title="Settings"
+                style={{
+                  background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
+                  width: 38, height: 38, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#64748b', transition: 'background .15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            )}
+
+            {/* ปุ่ม Logout */}
             <button
-              onClick={onOpenSettings}
-              title="Settings"
+              onClick={onLogout}
+              title="ออกจากระบบ"
               style={{
                 background: '#fff', border: '1.5px solid #e2e8f0', borderRadius: 10,
-                width: 38, height: 38, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#64748b', transition: 'background .15s',
+                padding: '0 12px', height: 38, cursor: 'pointer',
+                fontSize: 12, fontWeight: 600, color: '#ef4444',
+                transition: 'background .15s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#fef2f2'; }}
               onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </button>
+            >ออก</button>
           </div>
         </div>
 
@@ -183,7 +195,7 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
             <TankGauge
               pondWidth={Math.sqrt(pond.area)}
               pondDepth={pond.depth}
-              fillPercent={pct}
+              fillPercent={pct ?? 0}
               status={status}
               id={`large-${pond.id}`}
               size="large"
@@ -196,11 +208,11 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
 
             {/* Stats */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Stat label="ระดับน้ำ"       value={pct.toFixed(1)}                        unit="%" color={color} />
-              <Stat label="ความสูงน้ำ"     value={Math.max(0, waterHeight).toFixed(1)}   unit="ซม." />
-              <Stat label="ปริมาณน้ำ"      value={Math.max(0, volume).toLocaleString('en-US', { maximumFractionDigits: 0 })}                               unit="ลิตร" minWidth={170} />
-              <Stat label="ปริมาณน้ำ"      value={(Math.max(0, volume) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} unit="ตัน"  minWidth={170} />
-              <Stat label="ระยะเซนเซอร์"   value={dist.toFixed(1)}                        unit="ซม." />
+              <Stat label="ระดับน้ำ"     value={pct      != null ? pct.toFixed(1)                                                                                     : '—'} unit="%" color={color} />
+              <Stat label="ความสูงน้ำ"   value={waterHeight != null ? Math.max(0, waterHeight).toFixed(1)                                                     : '—'} unit="ซม." />
+              <Stat label="ปริมาณน้ำ"    value={volume   != null ? Math.max(0, volume).toLocaleString('en-US', { maximumFractionDigits: 0 })                  : '—'} unit="ลิตร" minWidth={170} />
+              <Stat label="ปริมาณน้ำ"    value={volume   != null ? (Math.max(0, volume) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—'} unit="ตัน" minWidth={170} />
+              <Stat label="ระยะเซนเซอร์" value={dist     != null ? dist.toFixed(1)                                                                            : '—'} unit="ซม." />
             </div>
 
             {/* Level History — chart + calendar */}

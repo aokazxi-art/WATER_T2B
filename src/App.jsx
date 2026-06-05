@@ -3,38 +3,30 @@ import HomePage from './pages/HomePage';
 import PondDetailPage from './pages/PondDetailPage';
 import PondSettingsPage from './pages/PondSettingsPage';
 import ConnectionPage from './pages/ConnectionPage';
+import LoginPage from './pages/LoginPage';
 import { usePondData } from './hooks/usePondData';
+import { loadSession, clearSession } from './auth/auth';
 
-// หน้าที่เป็นไปได้: 'home' | 'detail' | 'settings' | 'connection'
 export default function App() {
   const { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected } = usePondData();
 
-  const [page, setPage] = useState('home');          // หน้าปัจจุบัน
-  const [selectedPondId, setSelectedPondId] = useState(null); // บ่อที่เลือก
+  const [user, setUser] = useState(loadSession);           // null = ยังไม่ login
+  const [page, setPage] = useState('home');
+  const [selectedPondId, setSelectedPondId] = useState(null);
 
-  // เปิดหน้ารายละเอียดบ่อ
-  function openDetail(id) {
-    setSelectedPondId(id);
-    setPage('detail');
-  }
+  const isAdmin = user?.role === 'admin';
 
-  // เปิดหน้าตั้งค่า (จากปุ่มฟันเฟืองในหน้า detail)
-  function openSettings() {
-    setPage('settings');
-  }
+  function handleLogin(u) { setUser(u); setPage('home'); }
+  function handleLogout() { clearSession(); setUser(null); setPage('home'); setSelectedPondId(null); }
 
-  // ย้อนกลับจากหน้าตั้งค่า → หน้า detail
-  function backFromSettings() {
-    setPage('detail');
-  }
+  function openDetail(id)    { setSelectedPondId(id); setPage('detail'); }
+  function openSettings()    { setPage('settings'); }
+  function backFromSettings(){ setPage('detail'); }
+  function backFromDetail()  { setSelectedPondId(null); setPage('home'); }
 
-  // ย้อนกลับจากหน้า detail → หน้าหลัก
-  function backFromDetail() {
-    setSelectedPondId(null);
-    setPage('home');
-  }
+  if (!user) return <LoginPage onLogin={handleLogin} />;
 
-  if (page === 'connection') {
+  if (page === 'connection' && isAdmin) {
     return (
       <ConnectionPage
         ponds={ponds}
@@ -44,11 +36,13 @@ export default function App() {
         addPond={addPond}
         removePond={removePond}
         updatePond={updatePond}
+        user={user}
+        onLogout={handleLogout}
       />
     );
   }
 
-  if (page === 'settings' && selectedPondId != null) {
+  if (page === 'settings' && isAdmin && selectedPondId != null) {
     const state = getPondState(selectedPondId);
     if (!state) return null;
     return (
@@ -56,6 +50,8 @@ export default function App() {
         pond={state.pond}
         onUpdate={(updates) => updatePond(selectedPondId, updates)}
         onBack={backFromSettings}
+        user={user}
+        onLogout={handleLogout}
       />
     );
   }
@@ -67,19 +63,22 @@ export default function App() {
         getPondState={getPondState}
         updatePond={updatePond}
         onBack={backFromDetail}
-        onOpenSettings={openSettings}
+        onOpenSettings={isAdmin ? openSettings : null}
+        user={user}
+        onLogout={handleLogout}
       />
     );
   }
 
-  // หน้าหลัก รายการบ่อทั้งหมด
   return (
     <HomePage
       ponds={ponds}
       getPondState={getPondState}
       isConnected={isConnected}
       onSelectPond={openDetail}
-      onOpenConnection={() => setPage('connection')}
+      onOpenConnection={isAdmin ? () => setPage('connection') : null}
+      user={user}
+      onLogout={handleLogout}
     />
   );
 }

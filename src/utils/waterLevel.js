@@ -27,9 +27,10 @@ export function getStatus(pct, thresholdYellow, thresholdRed) {
   return 'normal';
 }
 
-// คืนสีของสถานะ (เขียว / เหลือง / แดง)
+// คืนสีของสถานะ (เขียว / เหลือง / แดง / เทา)
 export function getStatusColor(status) {
-  if (status === 'danger') return '#ef4444';
+  if (status === 'danger')  return '#ef4444';
   if (status === 'warning') return '#f59e0b';
+  if (status === 'loading') return '#94a3b8';
   return '#22c55e';
 }
