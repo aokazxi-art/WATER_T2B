@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue, set as fbSet, update as fbUpdate, remove as fbRemove } from 'firebase/database';
+import { ref, onValue, get, set as fbSet, update as fbUpdate, remove as fbRemove, push as fbPush } from 'firebase/database';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
 
@@ -76,18 +76,42 @@ function dayStr(date) {
 }
 
 function appendDailyHistory(pondId, entry) {
-  const key = `water_daily_${pondId}_${dayStr()}`;
+  const dateKey = dayStr();
+  const lsKey = `water_daily_${pondId}_${dateKey}`;
   try {
-    const arr = JSON.parse(localStorage.getItem(key) || '[]');
+    const arr = JSON.parse(localStorage.getItem(lsKey) || '[]');
     arr.push(entry);
-    localStorage.setItem(key, JSON.stringify(arr.slice(-500)));
+    localStorage.setItem(lsKey, JSON.stringify(arr.slice(-500)));
   } catch (_) {}
+  fbPush(ref(db, `pond_history/${pondId}/${dateKey}`), entry).catch(() => {});
 }
 
 export function loadDailyHistory(pondId, date) {
   const key = `water_daily_${pondId}_${dayStr(date)}`;
   try { return JSON.parse(localStorage.getItem(key) || '[]'); }
   catch (_) { return []; }
+}
+
+export async function loadDailyHistoryAsync(pondId, date) {
+  const dateKey = dayStr(date);
+  const lsKey = `water_daily_${pondId}_${dateKey}`;
+  try {
+    const cached = localStorage.getItem(lsKey);
+    if (cached) {
+      const arr = JSON.parse(cached);
+      if (arr.length > 0) return arr;
+    }
+  } catch (_) {}
+  try {
+    const snap = await get(ref(db, `pond_history/${pondId}/${dateKey}`));
+    const data = snap.val();
+    if (data && typeof data === 'object') {
+      const arr = Object.values(data).sort((a, b) => a.time - b.time);
+      try { localStorage.setItem(lsKey, JSON.stringify(arr)); } catch (_) {}
+      return arr;
+    }
+  } catch (_) {}
+  return [];
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -149,11 +173,12 @@ export function usePondData() {
         setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
         setSensorMeta(prev => ({ ...prev, [p.id]: { timestamp: receivedAt, battery: data.battery ?? null } }));
 
+        const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
+        const pct   = calcWaterPercent(wh, p.depth);
+        const entry = { pct, time: receivedAt, battery: data.battery ?? null };
+        appendDailyHistory(p.id, entry);
+
         setHistories(prev => {
-          const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
-          const pct   = calcWaterPercent(wh, p.depth);
-          const entry = { pct, time: receivedAt, battery: data.battery ?? null };
-          appendDailyHistory(p.id, entry);
           const arr = [...(prev[p.id] || []), entry];
           return { ...prev, [p.id]: arr.slice(-HISTORY_SIZE) };
         });

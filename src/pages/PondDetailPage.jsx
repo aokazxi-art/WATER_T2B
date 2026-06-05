@@ -3,7 +3,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import TankGauge from '../components/TankGauge';
 import StatusBadge from '../components/StatusBadge';
 import { getStatusColor } from '../utils/waterLevel';
-import { loadDailyHistory } from '../hooks/usePondData';
+import { loadDailyHistoryAsync } from '../hooks/usePondData';
 
 const DAYS_TH   = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 const MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
@@ -81,7 +81,12 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
   const state = getPondState(pondId);
 
   useEffect(() => {
-    if (state?.pond) setDailyData(loadDailyHistory(state.pond.id, selectedDate));
+    if (!state?.pond) return;
+    let cancelled = false;
+    loadDailyHistoryAsync(state.pond.id, selectedDate).then(data => {
+      if (!cancelled) setDailyData(data);
+    });
+    return () => { cancelled = true; };
   }, [state?.pond?.id, selectedDate]);
 
   const daysWithData = useMemo(
