@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue } from 'firebase/database';
+import { ref, onValue, get, set as fbSet, update as fbUpdate } from 'firebase/database';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
 
@@ -7,10 +7,10 @@ const HISTORY_SIZE = 20;
 
 // area หน่วย ซม², depth หน่วย ซม., sensorOffset หน่วย ซม.
 const DEFAULT_PONDS = [
-  { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80 },
-  { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80 },
-  { id: 3, name: 'Pond C', depth: 200, area: 200000, sensorOffset: 30, thresholdYellow: 65, thresholdRed: 75 },
-  { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85 },
+  { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '' },
+  { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '' },
+  { id: 3, name: 'Pond C', depth: 200, area: 200000, sensorOffset: 30, thresholdYellow: 65, thresholdRed: 75, deviceId: '' },
+  { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85, deviceId: '' },
 ];
 
 function loadPonds() {
@@ -23,6 +23,7 @@ function loadPonds() {
         ...p,
         area: p.area ?? ((p.width ?? 300) * (p.length ?? 400)),
         sensorOffset: p.sensorOffset ?? 30,
+        deviceId: p.deviceId ?? '',
       }));
     }
   } catch (_) {}
@@ -91,6 +92,22 @@ export function usePondData() {
   useEffect(() => { saveSensorDistances(sensorDistances); }, [sensorDistances]);
   useEffect(() => { saveSensorMeta(sensorMeta); }, [sensorMeta]);
 
+  // โหลด settings จาก Firebase ตอน mount (Firebase = source of truth ข้ามเครื่อง/เบราว์เซอร์)
+  useEffect(() => {
+    loadPonds().forEach(p => {
+      get(ref(db, `ponds/pond_${p.id}/settings`))
+        .then(snapshot => {
+          const data = snapshot.val();
+          if (data && typeof data === 'object') {
+            setPonds(prev => prev.map(pond =>
+              pond.id === p.id ? { ...pond, ...data, id: pond.id } : pond
+            ));
+          }
+        })
+        .catch(() => {}); // offline / ไม่มีข้อมูล → ใช้ localStorage ตามเดิม
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const connectedRef = ref(db, '.info/connected');
     return onValue(connectedRef, snap => setIsConnected(snap.val() === true));
@@ -125,6 +142,30 @@ export function usePondData() {
 
   const updatePond = useCallback((id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    // ใช้ update (merge) แทน set เพื่อรองรับ partial update เช่น { deviceId }
+    fbUpdate(ref(db, `ponds/pond_${id}/settings`), updates).catch(() => {});
+  }, []);
+
+  // เพิ่มบ่อ + เซนเซอร์ใหม่ (id ถัดไปจาก max ปัจจุบัน)
+  const addPond = useCallback((name, deviceId = '') => {
+    setPonds(prev => {
+      const newId = Math.max(0, ...prev.map(p => p.id)) + 1;
+      const newPond = {
+        id: newId, name, deviceId,
+        depth: 100, area: 10000, sensorOffset: 30,
+        thresholdYellow: 70, thresholdRed: 80,
+      };
+      fbSet(ref(db, `ponds/pond_${newId}/settings`), newPond).catch(() => {});
+      return [...prev, newPond];
+    });
+  }, []);
+
+  // ลบบ่อ + เซนเซอร์ (ล้าง state ย่อยที่เกี่ยวข้องด้วย)
+  const removePond = useCallback((id) => {
+    setPonds(prev => prev.filter(p => p.id !== id));
+    setSensorDistances(prev => { const n = { ...prev }; delete n[id]; return n; });
+    setSensorMeta(prev =>      { const n = { ...prev }; delete n[id]; return n; });
+    setHistories(prev =>       { const n = { ...prev }; delete n[id]; return n; });
   }, []);
 
   const getPondState = useCallback((id) => {
@@ -139,5 +180,5 @@ export function usePondData() {
     return { pond, dist, waterHeight, pct, volume, status, history: histories[id] || [] };
   }, [ponds, sensorDistances, histories]);
 
-  return { ponds, updatePond, getPondState, sensorMeta, isConnected };
+  return { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected };
 }

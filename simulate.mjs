@@ -5,7 +5,7 @@ const BASE_URL = 'https://gen-lang-client-0103823618-default-rtdb.asia-southeast
 
 // config แต่ละบ่อ: depth (cm), raw_cm เริ่มต้น
 const PONDS = [
-  { id: 1, depth: 150, rawCm: 90,  battery: 85 },
+  { id: 1, depth: 100, rawCm: 100,  battery: 85 },
   { id: 2, depth: 120, rawCm: 102, battery: 72 },
   { id: 3, depth: 200, rawCm: 86,  battery: 91 },
   { id: 4, depth: 180, rawCm: 52,  battery: 60 },
