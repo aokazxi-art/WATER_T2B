@@ -1,29 +1,39 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue, get, set as fbSet, update as fbUpdate } from 'firebase/database';
+import { ref, onValue, set as fbSet, update as fbUpdate, remove as fbRemove } from 'firebase/database';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
 
 const HISTORY_SIZE = 20;
+const REGISTRY = 'pond_registry'; // source of truth ข้ามเครื่อง
+
+// ค่า default ที่ใช้เติมฟิลด์ที่ขาดหายเมื่อ merge จาก Firebase
+const DEFAULT_FIELDS = {
+  depth: 100, area: 10000, sensorOffset: 30,
+  thresholdYellow: 70, thresholdRed: 80,
+  deviceId: '', gatewayId: null,
+};
 
 // area หน่วย ซม², depth หน่วย ซม., sensorOffset หน่วย ซม.
 const DEFAULT_PONDS = [
-  { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '' },
-  { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '' },
-  { id: 3, name: 'Pond C', depth: 200, area: 200000, sensorOffset: 30, thresholdYellow: 65, thresholdRed: 75, deviceId: '' },
-  { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85, deviceId: '' },
+  { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '', gatewayId: null },
+  { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '', gatewayId: null },
+  { id: 3, name: 'Pond C', depth: 200, area: 200000, sensorOffset: 30, thresholdYellow: 65, thresholdRed: 75, deviceId: '', gatewayId: null },
+  { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85, deviceId: '', gatewayId: null },
 ];
+
+// ─── localStorage helpers (cache สำหรับ offline) ─────────────────────────────
 
 function loadPonds() {
   try {
     const saved = localStorage.getItem('water_monitor_ponds');
     if (saved) {
       const ponds = JSON.parse(saved);
-      // migrate format เก่า (width × length) → area
       return ponds.map(p => ({
-        ...p,
-        area: p.area ?? ((p.width ?? 300) * (p.length ?? 400)),
+        ...DEFAULT_FIELDS, ...p,
+        area:         p.area ?? ((p.width ?? 300) * (p.length ?? 400)),
         sensorOffset: p.sensorOffset ?? 30,
-        deviceId: p.deviceId ?? '',
+        deviceId:     p.deviceId ?? '',
+        gatewayId:    p.gatewayId ?? null,
       }));
     }
   } catch (_) {}
@@ -36,27 +46,29 @@ function savePonds(ponds) {
 
 function loadSensorDistances() {
   try {
-    const saved = localStorage.getItem('water_monitor_sensor_distances');
-    if (saved) return JSON.parse(saved);
+    const s = localStorage.getItem('water_monitor_sensor_distances');
+    if (s) return JSON.parse(s);
   } catch (_) {}
   return {};
 }
 
-function saveSensorDistances(distances) {
-  localStorage.setItem('water_monitor_sensor_distances', JSON.stringify(distances));
+function saveSensorDistances(d) {
+  localStorage.setItem('water_monitor_sensor_distances', JSON.stringify(d));
 }
 
 function loadSensorMeta() {
   try {
-    const saved = localStorage.getItem('water_monitor_sensor_meta');
-    if (saved) return JSON.parse(saved);
+    const s = localStorage.getItem('water_monitor_sensor_meta');
+    if (s) return JSON.parse(s);
   } catch (_) {}
   return {};
 }
 
-function saveSensorMeta(meta) {
-  localStorage.setItem('water_monitor_sensor_meta', JSON.stringify(meta));
+function saveSensorMeta(m) {
+  localStorage.setItem('water_monitor_sensor_meta', JSON.stringify(m));
 }
+
+// ─── Daily history ────────────────────────────────────────────────────────────
 
 function dayStr(date) {
   const d = date || new Date();
@@ -74,53 +86,64 @@ function appendDailyHistory(pondId, entry) {
 
 export function loadDailyHistory(pondId, date) {
   const key = `water_daily_${pondId}_${dayStr(date)}`;
-  try {
-    return JSON.parse(localStorage.getItem(key) || '[]');
-  } catch (_) { return []; }
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); }
+  catch (_) { return []; }
 }
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
 export function usePondData() {
-  const [ponds, setPonds] = useState(loadPonds);
+  const [ponds, setPonds]                 = useState(loadPonds);
   const [sensorDistances, setSensorDistances] = useState(loadSensorDistances);
-  const [sensorMeta, setSensorMeta] = useState(loadSensorMeta);
-  const [histories, setHistories] = useState(() =>
+  const [sensorMeta, setSensorMeta]       = useState(loadSensorMeta);
+  const [histories, setHistories]         = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
   );
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnected, setIsConnected]     = useState(false);
 
-  useEffect(() => { savePonds(ponds); }, [ponds]);
+  // localStorage cache — อัปเดตทุกครั้งที่ state เปลี่ยน
+  useEffect(() => { savePonds(ponds); },             [ponds]);
   useEffect(() => { saveSensorDistances(sensorDistances); }, [sensorDistances]);
-  useEffect(() => { saveSensorMeta(sensorMeta); }, [sensorMeta]);
+  useEffect(() => { saveSensorMeta(sensorMeta); },   [sensorMeta]);
 
-  // โหลด settings จาก Firebase ตอน mount (Firebase = source of truth ข้ามเครื่อง/เบราว์เซอร์)
+  // ── Firebase connection status ──────────────────────────────────────────────
   useEffect(() => {
-    loadPonds().forEach(p => {
-      get(ref(db, `ponds/pond_${p.id}/settings`))
-        .then(snapshot => {
-          const data = snapshot.val();
-          if (data && typeof data === 'object') {
-            setPonds(prev => prev.map(pond =>
-              pond.id === p.id ? { ...pond, ...data, id: pond.id } : pond
-            ));
-          }
-        })
-        .catch(() => {}); // offline / ไม่มีข้อมูล → ใช้ localStorage ตามเดิม
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const connectedRef = ref(db, '.info/connected');
-    return onValue(connectedRef, snap => setIsConnected(snap.val() === true));
+    const connRef = ref(db, '.info/connected');
+    return onValue(connRef, snap => setIsConnected(snap.val() === true));
   }, []);
 
+  // ── pond_registry: real-time listener (source of truth ข้ามเครื่อง) ─────────
+  // ฟัง real-time ทุกครั้งที่ใครแก้ไข/เพิ่ม/ลบบ่อจากเครื่องใดก็ตาม
+  useEffect(() => {
+    const registryRef = ref(db, REGISTRY);
+    const unsub = onValue(registryRef, snapshot => {
+      const data = snapshot.val();
+      if (data && typeof data === 'object') {
+        // Firebase มีข้อมูล → ใช้เป็น source of truth
+        const fbPonds = Object.values(data)
+          .map(p => ({ ...DEFAULT_FIELDS, ...p }))
+          .sort((a, b) => a.id - b.id);
+        setPonds(fbPonds);
+      } else {
+        // Firebase ว่าง (เปิดครั้งแรก) → push ข้อมูล local ขึ้นไป
+        const localPonds = loadPonds();
+        const batch = {};
+        localPonds.forEach(p => { batch[p.id] = p; });
+        fbUpdate(ref(db, REGISTRY), batch).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  // ── Sensor data listener ────────────────────────────────────────────────────
   useEffect(() => {
     const unsubscribes = ponds.map(p => {
       const sensorRef = ref(db, `ponds/pond_${p.id}/last_reading`);
-      return onValue(sensorRef, (snapshot) => {
+      return onValue(sensorRef, snapshot => {
         const data = snapshot.val();
         if (!data) return;
 
-        const dist = data.raw_cm;
+        const dist       = data.raw_cm;
         const receivedAt = Date.now();
 
         setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
@@ -136,33 +159,29 @@ export function usePondData() {
         });
       });
     });
-
-    return () => unsubscribes.forEach(unsub => unsub());
+    return () => unsubscribes.forEach(u => u());
   }, [ponds]);
 
+  // ── CRUD ────────────────────────────────────────────────────────────────────
+
+  // เขียนลง pond_registry → onValue listener จะ push กลับมาทุกเครื่องอัตโนมัติ
   const updatePond = useCallback((id, updates) => {
-    setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    // ใช้ update (merge) แทน set เพื่อรองรับ partial update เช่น { deviceId }
-    fbUpdate(ref(db, `ponds/pond_${id}/settings`), updates).catch(() => {});
+    setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p)); // optimistic
+    fbUpdate(ref(db, `${REGISTRY}/${id}`), updates).catch(() => {});
   }, []);
 
-  // เพิ่มบ่อ + เซนเซอร์ใหม่ (id ถัดไปจาก max ปัจจุบัน)
-  const addPond = useCallback((name, deviceId = '') => {
+  const addPond = useCallback((name, deviceId = '', gatewayId = null) => {
     setPonds(prev => {
-      const newId = Math.max(0, ...prev.map(p => p.id)) + 1;
-      const newPond = {
-        id: newId, name, deviceId,
-        depth: 100, area: 10000, sensorOffset: 30,
-        thresholdYellow: 70, thresholdRed: 80,
-      };
-      fbSet(ref(db, `ponds/pond_${newId}/settings`), newPond).catch(() => {});
-      return [...prev, newPond];
+      const newId   = Math.max(0, ...prev.map(p => p.id)) + 1;
+      const newPond = { ...DEFAULT_FIELDS, id: newId, name, deviceId, gatewayId };
+      fbSet(ref(db, `${REGISTRY}/${newId}`), newPond).catch(() => {}); // listener จะ push กลับมา
+      return [...prev, newPond]; // optimistic local update
     });
   }, []);
 
-  // ลบบ่อ + เซนเซอร์ (ล้าง state ย่อยที่เกี่ยวข้องด้วย)
   const removePond = useCallback((id) => {
-    setPonds(prev => prev.filter(p => p.id !== id));
+    setPonds(prev => prev.filter(p => p.id !== id)); // optimistic
+    fbRemove(ref(db, `${REGISTRY}/${id}`)).catch(() => {}); // listener จะ sync กลับมา
     setSensorDistances(prev => { const n = { ...prev }; delete n[id]; return n; });
     setSensorMeta(prev =>      { const n = { ...prev }; delete n[id]; return n; });
     setHistories(prev =>       { const n = { ...prev }; delete n[id]; return n; });
