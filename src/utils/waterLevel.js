@@ -1,9 +1,7 @@
-// เซ็นเซอร์ติดตั้งสูงกว่าขอบบ่อ 30 ซม.
-const SENSOR_OFFSET = 30;
-
 // คำนวณความสูงของน้ำจากระยะที่เซ็นเซอร์วัดได้
-export function calcWaterHeight(sensorDistance, pondDepth) {
-  return pondDepth + SENSOR_OFFSET - sensorDistance;
+// sensorOffset = ระยะห่างเซนเซอร์จากขอบบ่อ (ซม.)
+export function calcWaterHeight(sensorDistance, pondDepth, sensorOffset) {
+  return pondDepth + sensorOffset - sensorDistance;
 }
 
 // แปลงความสูงน้ำเป็น % เทียบกับความลึกบ่อ (clamp 0–100)
@@ -12,9 +10,14 @@ export function calcWaterPercent(waterHeight, pondDepth) {
   return Math.min(100, Math.max(0, pct));
 }
 
-// คำนวณปริมาตรน้ำในหน่วยลิตร (กว้าง × ยาว × สูง หน่วย ซม. → ลิตร)
-export function calcVolumeLiters(width, length, waterHeight) {
-  return (width * length * waterHeight) / 1000;
+// คำนวณปริมาตรน้ำ (area หน่วย ซม², waterHeight หน่วย ซม → ลิตร)
+export function calcVolumeLiters(area, waterHeight) {
+  return (area * waterHeight) / 1000;
+}
+
+// แปลงลิตร → ตัน (น้ำ 1 ลิตร = 1 กก. = 0.001 ตัน)
+export function calcVolumeTons(volumeLiters) {
+  return volumeLiters / 1000;
 }
 
 // คืนสถานะ 'normal' | 'warning' | 'danger' จาก % และค่า threshold ที่ตั้งไว้
@@ -30,4 +33,3 @@ export function getStatusColor(status) {
   if (status === 'warning') return '#f59e0b';
   return '#22c55e';
 }
-

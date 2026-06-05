@@ -35,9 +35,9 @@ export default function PondCard({ pondState, onClick }) {
       {/* ชื่อบ่อ */}
       <div style={{ fontWeight: 700, fontSize: 17, color: '#1e293b' }}>{pond.name}</div>
 
-      {/* ถังน้ำขนาดเล็ก */}
+      {/* ถังน้ำขนาดเล็ก — ใช้ sqrt(area) เป็นความกว้างในการคำนวณสัดส่วน */}
       <TankGauge
-        pondWidth={pond.width}
+        pondWidth={Math.sqrt(pond.area)}
         pondDepth={pond.depth}
         fillPercent={pct}
         status={status}
@@ -56,9 +56,9 @@ export default function PondCard({ pondState, onClick }) {
         </span>
       </div>
 
-      {/* ขนาดบ่อ กว้าง × ยาว × ลึก */}
+      {/* พื้นที่หน้าตัดและความลึก */}
       <div style={{ fontSize: 12, color: '#64748b' }}>
-        {pond.width} × {pond.length} × {pond.depth} cm
+        {(pond.area / 10000).toFixed(2)} ม² | ลึก {pond.depth} ซม.
       </div>
     </div>
   );

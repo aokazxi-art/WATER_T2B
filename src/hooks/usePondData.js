@@ -5,17 +5,26 @@ import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '
 
 const HISTORY_SIZE = 20;
 
+// area หน่วย ซม², depth หน่วย ซม., sensorOffset หน่วย ซม.
 const DEFAULT_PONDS = [
-  { id: 1, name: 'Pond A', depth: 150, width: 300, length: 400, thresholdYellow: 70, thresholdRed: 80 },
-  { id: 2, name: 'Pond B', depth: 120, width: 250, length: 350, thresholdYellow: 70, thresholdRed: 80 },
-  { id: 3, name: 'Pond C', depth: 200, width: 400, length: 500, thresholdYellow: 65, thresholdRed: 75 },
-  { id: 4, name: 'Pond D', depth: 180, width: 350, length: 450, thresholdYellow: 70, thresholdRed: 85 },
+  { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80 },
+  { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80 },
+  { id: 3, name: 'Pond C', depth: 200, area: 200000, sensorOffset: 30, thresholdYellow: 65, thresholdRed: 75 },
+  { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85 },
 ];
 
 function loadPonds() {
   try {
     const saved = localStorage.getItem('water_monitor_ponds');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const ponds = JSON.parse(saved);
+      // migrate format เก่า (width × length) → area
+      return ponds.map(p => ({
+        ...p,
+        area: p.area ?? ((p.width ?? 300) * (p.length ?? 400)),
+        sensorOffset: p.sensorOffset ?? 30,
+      }));
+    }
   } catch (_) {}
   return DEFAULT_PONDS;
 }
@@ -78,24 +87,15 @@ export function usePondData() {
   );
   const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-    savePonds(ponds);
-  }, [ponds]);
-
-  useEffect(() => {
-    saveSensorDistances(sensorDistances);
-  }, [sensorDistances]);
-
-  useEffect(() => {
-    saveSensorMeta(sensorMeta);
-  }, [sensorMeta]);
+  useEffect(() => { savePonds(ponds); }, [ponds]);
+  useEffect(() => { saveSensorDistances(sensorDistances); }, [sensorDistances]);
+  useEffect(() => { saveSensorMeta(sensorMeta); }, [sensorMeta]);
 
   useEffect(() => {
     const connectedRef = ref(db, '.info/connected');
     return onValue(connectedRef, snap => setIsConnected(snap.val() === true));
   }, []);
 
-  // ดึงข้อมูลจาก Firebase real-time
   useEffect(() => {
     const unsubscribes = ponds.map(p => {
       const sensorRef = ref(db, `ponds/pond_${p.id}/last_reading`);
@@ -103,14 +103,14 @@ export function usePondData() {
         const data = snapshot.val();
         if (!data) return;
 
-        const dist      = data.raw_cm;
-        const receivedAt = Date.now(); // ใช้เวลาที่รับข้อมูลจริง ไม่ใช้ clock ของ sensor
+        const dist = data.raw_cm;
+        const receivedAt = Date.now();
 
         setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
         setSensorMeta(prev => ({ ...prev, [p.id]: { timestamp: receivedAt, battery: data.battery ?? null } }));
 
         setHistories(prev => {
-          const wh    = calcWaterHeight(dist, p.depth);
+          const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
           const pct   = calcWaterPercent(wh, p.depth);
           const entry = { pct, time: receivedAt, battery: data.battery ?? null };
           appendDailyHistory(p.id, entry);
@@ -132,9 +132,9 @@ export function usePondData() {
     if (!pond) return null;
     const dist = sensorDistances[id];
     if (dist == null) return { pond, dist: null, waterHeight: null, pct: null, volume: null, status: 'loading', history: histories[id] || [] };
-    const waterHeight = calcWaterHeight(dist, pond.depth);
-    const pct = calcWaterPercent(waterHeight, pond.depth);
-    const volume = calcVolumeLiters(pond.width, pond.length, waterHeight);
+    const waterHeight = calcWaterHeight(dist, pond.depth, pond.sensorOffset);
+    const pct    = calcWaterPercent(waterHeight, pond.depth);
+    const volume = calcVolumeLiters(pond.area, waterHeight);
     const status = getStatus(pct, pond.thresholdYellow, pond.thresholdRed);
     return { pond, dist, waterHeight, pct, volume, status, history: histories[id] || [] };
   }, [ponds, sensorDistances, histories]);

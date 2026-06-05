@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
-// input field พร้อม label และหน่วย (ใช้ซ้ำภายใน SettingsPanel)
-function Field({ label, value, onChange, min, max, unit }) {
+function Field({ label, value, onChange, min, max, step, unit }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
       <span style={{ color: '#64748b', fontWeight: 600 }}>{label}</span>
@@ -11,7 +10,7 @@ function Field({ label, value, onChange, min, max, unit }) {
           value={value}
           min={min}
           max={max}
-          // แปลงกลับเป็น number ถ้า value เดิมเป็น number
+          step={step}
           onChange={e => onChange(typeof value === 'number' ? Number(e.target.value) : e.target.value)}
           style={{
             padding: '6px 10px', borderRadius: 8, border: '1.5px solid #cbd5e1',
@@ -24,22 +23,60 @@ function Field({ label, value, onChange, min, max, unit }) {
   );
 }
 
-// แผงตั้งค่าบ่อ — แก้ชื่อ, ขนาด, threshold แจ้งเตือน
-export default function SettingsPanel({ pond, onUpdate }) {
-  // สำเนาข้อมูลบ่อในเครื่อง ก่อน apply
-  const [local, setLocal] = useState({ ...pond });
+// Input ความลึกพร้อม toggle หน่วย เมตร/ซม. — ค่าจริงเก็บเป็น ซม. เสมอ
+function DepthField({ depthCm, onChangeCm }) {
+  const [unit, setUnit] = useState('cm');
+  const displayVal = unit === 'm' ? depthCm / 100 : depthCm;
 
-  // เปรียบเทียบว่ามีการแก้ไขหรือยัง
+  function handleChange(e) {
+    const v = Number(e.target.value);
+    onChangeCm(unit === 'm' ? Math.round(v * 100) : v);
+  }
+
+  const toggleStyle = (active) => ({
+    padding: '4px 10px', fontSize: 12, fontWeight: 600,
+    cursor: 'pointer', border: 'none',
+    background: active ? '#3b82f6' : '#fff',
+    color: active ? '#fff' : '#64748b',
+  });
+
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 }}>
+      <span style={{ color: '#64748b', fontWeight: 600 }}>ความลึกบ่อ</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="number"
+          value={displayVal}
+          min={0.01}
+          step={unit === 'm' ? 0.01 : 1}
+          onChange={handleChange}
+          style={{
+            padding: '6px 10px', borderRadius: 8, border: '1.5px solid #cbd5e1',
+            fontSize: 14, width: '100%', outline: 'none', boxSizing: 'border-box',
+          }}
+        />
+        <div style={{
+          display: 'flex', border: '1.5px solid #cbd5e1', borderRadius: 8,
+          overflow: 'hidden', flexShrink: 0,
+        }}>
+          <button type="button" onClick={() => setUnit('cm')} style={toggleStyle(unit === 'cm')}>ซม.</button>
+          <button type="button" onClick={() => setUnit('m')}  style={toggleStyle(unit === 'm')}>ม.</button>
+        </div>
+      </div>
+    </label>
+  );
+}
+
+export default function SettingsPanel({ pond, onUpdate }) {
+  const [local, setLocal] = useState({ ...pond });
   const changed = JSON.stringify(local) !== JSON.stringify(pond);
 
-  // helper สร้าง setter สำหรับแต่ละ key
   const set = (key) => (val) => setLocal(prev => ({ ...prev, [key]: val }));
-
-  // บันทึกการเปลี่ยนแปลงไปยัง state หลัก
   const apply = () => onUpdate(local);
-
-  // ยกเลิกการเปลี่ยนแปลง คืนค่าเดิม
   const reset = () => setLocal({ ...pond });
+
+  // แสดง area เป็น ม² (input) → เก็บเป็น ซม² ใน local.area
+  const areaM2 = +(local.area / 10000).toFixed(4);
 
   return (
     <div style={{
@@ -48,17 +85,35 @@ export default function SettingsPanel({ pond, onUpdate }) {
     }}>
       <h3 style={{ margin: 0, fontSize: 15, color: '#1e293b', fontWeight: 700 }}>Settings</h3>
 
-      {/* ชื่อบ่อ */}
       <Field label="Pond Name" value={local.name} onChange={set('name')} />
 
-      {/* ขนาดบ่อ */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <Field label="Depth"  value={local.depth}  onChange={set('depth')}  min={10} max={1000} unit="cm" />
-        <Field label="Width"  value={local.width}  onChange={set('width')}  min={10} max={5000} unit="cm" />
-        <Field label="Length" value={local.length} onChange={set('length')} min={10} max={5000} unit="cm" />
-      </div>
+      {/* พื้นที่หน้าตัดบ่อ: ผู้ใช้กรอก ม², เก็บ ซม² */}
+      <Field
+        label="พื้นที่หน้าตัดบ่อ"
+        value={areaM2}
+        onChange={(v) => setLocal(prev => ({ ...prev, area: v * 10000 }))}
+        min={0.01}
+        step={0.01}
+        unit="ม²"
+      />
 
-      {/* ค่า threshold แจ้งเตือน */}
+      {/* ความลึกบ่อ: toggle ซม./ม., เก็บ ซม. */}
+      <DepthField
+        depthCm={local.depth}
+        onChangeCm={(v) => setLocal(prev => ({ ...prev, depth: v }))}
+      />
+
+      {/* ระยะห่างเซนเซอร์จากขอบบ่อ */}
+      <Field
+        label="ระยะห่างเซนเซอร์จากขอบบ่อ"
+        value={local.sensorOffset}
+        onChange={set('sensorOffset')}
+        min={0}
+        max={500}
+        unit="ซม."
+      />
+
+      {/* Thresholds */}
       <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: 12 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#64748b', marginBottom: 10 }}>Alert Thresholds</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
@@ -67,7 +122,6 @@ export default function SettingsPanel({ pond, onUpdate }) {
         </div>
       </div>
 
-      {/* ปุ่ม Apply / Reset — disable เมื่อยังไม่มีการเปลี่ยนแปลง */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           onClick={apply}
@@ -77,9 +131,7 @@ export default function SettingsPanel({ pond, onUpdate }) {
             background: changed ? '#3b82f6' : '#94a3b8', color: '#fff',
             fontWeight: 600, fontSize: 14, cursor: changed ? 'pointer' : 'default',
           }}
-        >
-          Apply
-        </button>
+        >Apply</button>
         <button
           onClick={reset}
           disabled={!changed}
@@ -88,9 +140,7 @@ export default function SettingsPanel({ pond, onUpdate }) {
             background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14,
             cursor: changed ? 'pointer' : 'default',
           }}
-        >
-          Reset
-        </button>
+        >Reset</button>
       </div>
     </div>
   );

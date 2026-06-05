@@ -140,7 +140,7 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
           <div>
             <h2 style={{ margin: 0, fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{pond.name}</h2>
             <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>
-              {pond.width} × {pond.length} × {pond.depth} cm
+              พื้นที่ {(pond.area / 10000).toFixed(2)} ม² | ลึก {pond.depth} ซม. | เซนเซอร์ห่างขอบ {pond.sensorOffset} ซม.
             </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -176,7 +176,7 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
             flex: '0 0 auto',
           }}>
             <TankGauge
-              pondWidth={pond.width}
+              pondWidth={Math.sqrt(pond.area)}
               pondDepth={pond.depth}
               fillPercent={pct}
               status={status}
@@ -191,10 +191,11 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
 
             {/* Stats */}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Stat label="Water Height" value={Math.max(0, waterHeight).toFixed(1)} unit="cm" />
-              <Stat label="Water Level"  value={pct.toFixed(1)}                       unit="%" color={color} />
-              <Stat label="Volume"       value={Math.max(0, volume).toFixed(0)}        unit="L" />
-              <Stat label="Sensor Dist"  value={dist.toFixed(1)}                       unit="cm" />
+              <Stat label="ระดับน้ำ"       value={pct.toFixed(1)}                        unit="%" color={color} />
+              <Stat label="ความสูงน้ำ"     value={Math.max(0, waterHeight).toFixed(1)}   unit="ซม." />
+              <Stat label="ปริมาณน้ำ"      value={Math.max(0, volume).toFixed(0)}         unit="ลิตร" />
+              <Stat label="ปริมาณน้ำ"      value={(Math.max(0, volume) / 1000).toFixed(3)} unit="ตัน" />
+              <Stat label="ระยะเซนเซอร์"   value={dist.toFixed(1)}                        unit="ซม." />
             </div>
 
             {/* Level History — chart + calendar */}
