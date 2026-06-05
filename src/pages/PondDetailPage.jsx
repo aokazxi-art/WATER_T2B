@@ -57,14 +57,14 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-function Stat({ label, value, unit, color }) {
+function Stat({ label, value, unit, color, minWidth = 120 }) {
   return (
     <div style={{
       background: '#fff', borderRadius: 12, padding: '14px 18px',
-      border: '1.5px solid #e2e8f0', flex: 1, minWidth: 120,
+      border: '1.5px solid #e2e8f0', flex: 1, minWidth,
     }}>
       <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: color || '#1e293b' }}>
+      <div style={{ fontSize: 22, fontWeight: 800, color: color || '#1e293b', whiteSpace: 'nowrap' }}>
         {value}<span style={{ fontSize: 13, fontWeight: 500, color: '#94a3b8', marginLeft: 3 }}>{unit}</span>
       </div>
     </div>
@@ -198,8 +198,8 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Stat label="ระดับน้ำ"       value={pct.toFixed(1)}                        unit="%" color={color} />
               <Stat label="ความสูงน้ำ"     value={Math.max(0, waterHeight).toFixed(1)}   unit="ซม." />
-              <Stat label="ปริมาณน้ำ"      value={Math.max(0, volume).toFixed(0)}         unit="ลิตร" />
-              <Stat label="ปริมาณน้ำ"      value={(Math.max(0, volume) / 1000).toFixed(3)} unit="ตัน" />
+              <Stat label="ปริมาณน้ำ"      value={Math.max(0, volume).toLocaleString('en-US', { maximumFractionDigits: 0 })}                               unit="ลิตร" minWidth={170} />
+              <Stat label="ปริมาณน้ำ"      value={(Math.max(0, volume) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} unit="ตัน"  minWidth={170} />
               <Stat label="ระยะเซนเซอร์"   value={dist.toFixed(1)}                        unit="ซม." />
             </div>
 
