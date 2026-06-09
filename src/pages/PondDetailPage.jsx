@@ -84,17 +84,17 @@ function fmtTT(ts, h) {
 function HeroStat({ label, value, unit, accent }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
-      <div style={{ fontSize:10, color:'rgba(255,255,255,0.38)', fontWeight:700,
+      <div style={{ fontSize:10, color:'#94a3b8', fontWeight:700,
         textTransform:'uppercase', letterSpacing:'0.1em' }}>
         {label}
       </div>
       <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
         <span style={{ fontSize:27, fontWeight:800, lineHeight:1,
-          color: value!=null ? (accent||'#fff') : 'rgba(255,255,255,0.2)' }}>
+          color: value!=null ? (accent||'#0f172a') : '#e2e8f0' }}>
           {value ?? '—'}
         </span>
         {unit && value!=null && (
-          <span style={{ fontSize:12, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>{unit}</span>
+          <span style={{ fontSize:12, color:'#94a3b8', fontWeight:500 }}>{unit}</span>
         )}
       </div>
     </div>
@@ -220,40 +220,30 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
       {/* ── Content ───────────────────────────────────────── */}
       <div style={{ maxWidth:960, margin:'0 auto', padding:'24px 20px', display:'flex', flexDirection:'column', gap:16 }}>
 
-        {/* ── Hero card (dark) ── */}
+        {/* ── Hero card (light) ── */}
         <div className="anim-1" style={{
-          background: 'linear-gradient(135deg, #1a3050 0%, #0f1e35 60%, #152840 100%)',
+          background:'#fff',
           borderRadius:20, padding:'28px 28px',
-          boxShadow:'0 4px 24px rgba(15,30,53,.35)',
+          border:'1px solid #e8edf3',
+          boxShadow:'0 2px 16px rgba(15,30,53,.07)',
           display:'flex', gap:24, flexWrap:'wrap', alignItems:'center',
-          position:'relative', overflow:'hidden',
         }}>
-          {/* Soft radial glow behind tank */}
-          <div style={{
-            position:'absolute', top:'50%', left:150,
-            width:260, height:260,
-            background:`radial-gradient(circle, ${color}22 0%, transparent 70%)`,
-            transform:'translate(-50%,-50%)', pointerEvents:'none',
-          }}/>
-
           {/* Tank */}
-          <div style={{ position:'relative', zIndex:1, filter:`drop-shadow(0 0 18px ${color}45)` }}>
-            <TankGauge
-              pondWidth={Math.sqrt(pond.area)}
-              pondDepth={pond.depth}
-              fillPercent={pct ?? 0}
-              status={status}
-              id={`large-${pond.id}`}
-              size="large"
-            />
-          </div>
+          <TankGauge
+            pondWidth={Math.sqrt(pond.area)}
+            pondDepth={pond.depth}
+            fillPercent={pct ?? 0}
+            status={status}
+            id={`large-${pond.id}`}
+            size="large"
+          />
 
           {/* Stats */}
-          <div style={{ flex:1, minWidth:180, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'22px 32px', zIndex:1 }}>
-            <HeroStat label="ระดับน้ำ"     value={pct!=null ? pct.toFixed(1) : null}                                                                         unit="%"   accent={color}     />
-            <HeroStat label="ความสูงน้ำ"   value={waterHeight!=null ? Math.max(0,waterHeight).toFixed(1) : null}                                             unit="ซม." accent="#7dd3fc"   />
-            <HeroStat label="ปริมาณน้ำ"    value={volume!=null ? Math.max(0,volume).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : null} unit="ม³"  accent="#a5b4fc"   />
-            <HeroStat label="ระยะเซนเซอร์" value={dist!=null ? dist.toFixed(1) : null}                                                                       unit="ซม." accent="rgba(255,255,255,0.5)" />
+          <div style={{ flex:1, minWidth:180, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'22px 32px' }}>
+            <HeroStat label="ระดับน้ำ"     value={pct!=null ? pct.toFixed(1) : null}                                                                                              unit="%"   accent={color}     />
+            <HeroStat label="ความสูงน้ำ"   value={waterHeight!=null ? Math.max(0,waterHeight).toFixed(1) : null}                                                                  unit="ซม." accent="#0284c7"   />
+            <HeroStat label="ปริมาณน้ำ"    value={volume!=null ? Math.max(0,volume).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : null}             unit="ม³"  accent="#6366f1"   />
+            <HeroStat label="ระยะเซนเซอร์" value={dist!=null ? dist.toFixed(1) : null}                                                                                            unit="ซม." accent="#64748b"   />
           </div>
         </div>
 
