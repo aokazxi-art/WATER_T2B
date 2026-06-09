@@ -14,9 +14,9 @@ const MONTHS_TH_SHORT = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.
                           'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
 
 const PRESETS = [
-  { id: 'today', label: 'วันนี้'     },
-  { id: '7d',    label: '7 วัน'      },
-  { id: '30d',   label: '30 วัน'     },
+  { id: 'today',  label: 'วันนี้'    },
+  { id: '7d',     label: '7 วัน'     },
+  { id: '30d',    label: '30 วัน'    },
   { id: 'custom', label: 'กำหนดเอง' },
 ];
 
@@ -26,26 +26,26 @@ function dateToStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 function daysAgo(n) {
-  const d = new Date(); d.setDate(d.getDate() - n); return d;
+  const d = new Date(); d.setDate(d.getDate()-n); return d;
 }
 function getDaysInRange(s, e) {
-  const days = [], cur = new Date(s+'T00:00:00'), end = new Date(e+'T00:00:00');
+  const days=[], cur=new Date(s+'T00:00:00'), end=new Date(e+'T00:00:00');
   if (isNaN(cur)||isNaN(end)||cur>end) return days;
   while (cur<=end) { days.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
   return days;
 }
-function getDateRange(preset, cStart, cEnd) {
+function getDateRange(preset, cS, cE) {
   const t = dateToStr(new Date());
   if (preset==='7d')     return { start: dateToStr(daysAgo(6)),  end: t };
   if (preset==='30d')    return { start: dateToStr(daysAgo(29)), end: t };
-  if (preset==='custom') return { start: cStart, end: cEnd };
+  if (preset==='custom') return { start: cS, end: cE };
   return { start: t, end: t };
 }
-async function loadRangeData(pondId, s, e) {
+async function loadRange(pondId, s, e) {
   const days = getDaysInRange(s, e);
   if (!days.length) return [];
   const chunks = await Promise.all(days.map(d => loadDailyHistoryAsync(pondId, d)));
-  return chunks.flat().sort((a,b)=>a.time-b.time);
+  return chunks.flat().sort((a,b) => a.time - b.time);
 }
 function fmtRange(s, e) {
   if (!s||!e) return '';
@@ -64,17 +64,17 @@ function buildTicks(data) {
   const h=(tMax-tMin)/3_600_000;
   const step = h<=4?1 : h<=9?2 : h<=18?3 : h<=36?6 : h<=72?12 : h<=168?24 : Math.ceil(h/8);
   const sm=step*3_600_000, ft=Math.ceil(tMin/sm)*sm, ticks=[];
-  for (let t=ft;t<=tMax;t+=sm) ticks.push(t);
+  for (let t=ft; t<=tMax; t+=sm) ticks.push(t);
   return ticks;
 }
 function fmtTick(ts, h) {
-  const d=new Date(ts);
+  const d = new Date(ts);
   if (h<=36)  return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   if (h<=168) return `${d.getDate()}/${d.getMonth()+1} ${String(d.getHours()).padStart(2,'0')}:00`;
   return `${d.getDate()}/${d.getMonth()+1}`;
 }
 function fmtTT(ts, h) {
-  const d=new Date(ts);
+  const d = new Date(ts);
   if (h<=36) return d.toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   return `${d.getDate()} ${MONTHS_TH_SHORT[d.getMonth()]} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
@@ -83,48 +83,48 @@ function fmtTT(ts, h) {
 
 function HeroStat({ label, value, unit, accent }) {
   return (
-    <div style={{ paddingLeft: 14, borderLeft: `2px solid ${accent||'rgba(148,163,184,0.18)'}` }}>
-      <div style={{ fontSize: 10, color: '#475569', fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 5 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+      <div style={{ fontSize:10, color:'rgba(255,255,255,0.38)', fontWeight:700,
+        textTransform:'uppercase', letterSpacing:'0.1em' }}>
         {label}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-        <span style={{ fontSize: 26, fontWeight: 800, color: accent||'#f1f5f9', lineHeight: 1 }}>
+      <div style={{ display:'flex', alignItems:'baseline', gap:5 }}>
+        <span style={{ fontSize:27, fontWeight:800, lineHeight:1,
+          color: value!=null ? (accent||'#fff') : 'rgba(255,255,255,0.2)' }}>
           {value ?? '—'}
         </span>
-        {unit && <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>{unit}</span>}
+        {unit && value!=null && (
+          <span style={{ fontSize:12, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>{unit}</span>
+        )}
       </div>
     </div>
   );
 }
 
-function MiniStat({ label, value, accent }) {
+function StatPill({ label, value, accent }) {
   return (
-    <div style={{
-      flex: 1, textAlign: 'center',
-      background: 'rgba(255,255,255,0.04)',
-      border: '1px solid rgba(255,255,255,0.07)',
-      borderRadius: 10, padding: '8px 10px',
-    }}>
-      <div style={{ fontSize: 10, color: '#475569', fontWeight: 700,
-        textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 4 }}>
+    <div style={{ flex:1, textAlign:'center', padding:'10px 8px',
+      background: `${accent}0d`, borderRadius:10,
+      border: `1px solid ${accent}22` }}>
+      <div style={{ fontSize:10, color:'#94a3b8', fontWeight:600,
+        textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 18, fontWeight: 800, color: accent }}>{value}%</div>
+      <div style={{ fontSize:18, fontWeight:800, color:accent }}>{value}%</div>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSettings, onLogout }) {
   const todayStr = dateToStr(new Date());
 
-  const [preset,   setPreset]   = useState('today');
-  const [cStart,   setCStart]   = useState(todayStr);
-  const [cEnd,     setCEnd]     = useState(todayStr);
-  const [data,     setData]     = useState([]);
-  const [loading,  setLoading]  = useState(false);
+  const [preset,  setPreset]  = useState('today');
+  const [cStart,  setCStart]  = useState(todayStr);
+  const [cEnd,    setCEnd]    = useState(todayStr);
+  const [data,    setData]    = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const state = getPondState(pondId);
   const { start, end } = getDateRange(preset, cStart, cEnd);
@@ -133,7 +133,7 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
     if (!state?.pond || !start || !end) return;
     let cancelled = false;
     setLoading(true);
-    loadRangeData(state.pond.id, start, end).then(d => {
+    loadRange(state.pond.id, start, end).then(d => {
       if (!cancelled) { setData(d); setLoading(false); }
     });
     return () => { cancelled = true; };
@@ -142,113 +142,102 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
   if (!state) return null;
 
   const { pond, dist, waterHeight, pct, volume, status } = state;
-  const color = getStatusColor(status);
+  const color  = getStatusColor(status);
   const gradId = `grad-${pond.id}`;
 
-  const chartData  = data.map(x => ({ time: x.time, v: x.pct }));
+  const chartData  = data.map(x => ({ time:x.time, v:x.pct }));
   const rangeHours = chartData.length>=2
     ? (chartData[chartData.length-1].time - chartData[0].time) / 3_600_000 : 24;
-  const ticks  = buildTicks(chartData);
-  const avg    = data.length ? (data.reduce((s,x)=>s+x.pct,0)/data.length).toFixed(1) : null;
-  const dMin   = data.length ? Math.min(...data.map(x=>x.pct)).toFixed(1) : null;
-  const dMax   = data.length ? Math.max(...data.map(x=>x.pct)).toFixed(1) : null;
-  const label  = fmtRange(start, end);
+  const ticks = buildTicks(chartData);
+  const avg   = data.length ? (data.reduce((s,x)=>s+x.pct,0)/data.length).toFixed(1) : null;
+  const dMin  = data.length ? Math.min(...data.map(x=>x.pct)).toFixed(1) : null;
+  const dMax  = data.length ? Math.max(...data.map(x=>x.pct)).toFixed(1) : null;
 
   return (
-    <div style={{ minHeight: '100vh', background: '#060d1b', fontFamily: 'system-ui, "Segoe UI", sans-serif' }}>
+    <div style={{ minHeight:'100vh', background:'#f0f4f8' }}>
 
-      {/* ── Injected keyframes ── */}
       <style>{`
         @keyframes fadeUp {
-          from { opacity:0; transform:translateY(12px); }
+          from { opacity:0; transform:translateY(10px); }
           to   { opacity:1; transform:translateY(0); }
         }
-        @keyframes shimmer {
-          0%   { background-position: -400px 0; }
-          100% { background-position:  400px 0; }
-        }
-        .hero-card  { animation: fadeUp .4s ease both; }
-        .chart-card { animation: fadeUp .4s .12s ease both; }
-        input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+        .anim-1 { animation: fadeUp .35s ease both; }
+        .anim-2 { animation: fadeUp .35s .1s ease both; }
+        input[type="date"]::-webkit-calendar-picker-indicator { opacity:.5; cursor:pointer; }
       `}</style>
 
-      {/* ── Navbar ── */}
+      {/* ── Navbar ────────────────────────────────────────── */}
       <div style={{
-        background: '#0a1525',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        padding: '0 24px', height: 54,
-        display: 'flex', alignItems: 'center', gap: 12,
-        position: 'sticky', top: 0, zIndex: 20,
+        background:'#fff', borderBottom:'1px solid #e8edf3',
+        padding:'0 24px', height:54,
+        display:'flex', alignItems:'center', gap:12,
+        position:'sticky', top:0, zIndex:20,
+        boxShadow:'0 1px 8px rgba(0,0,0,.06)',
       }}>
-        {/* Back */}
         <button onClick={onBack} style={{
-          display: 'flex', alignItems: 'center', gap: 5,
-          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 8, padding: '5px 11px', cursor: 'pointer',
-          fontSize: 12, fontWeight: 600, color: '#94a3b8',
+          display:'flex', alignItems:'center', gap:5,
+          background:'none', border:'none', cursor:'pointer',
+          fontSize:13, fontWeight:600, color:'#64748b', padding:'4px 2px',
         }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6"/>
           </svg>
           กลับ
         </button>
 
-        <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)' }} />
+        <div style={{ width:1, height:20, background:'#e2e8f0' }} />
 
-        {/* Title area */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:15, fontWeight:700, color:'#0f172a',
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {pond.name}
             </span>
             <StatusBadge status={status} />
           </div>
-          <div style={{ fontSize: 11, color: '#334155', marginTop: 1 }}>
+          <div style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>
             {(pond.area/10000).toFixed(2)} ม²  ·  ลึก {pond.depth} ซม.  ·  offset {pond.sensorOffset} ซม.
           </div>
         </div>
 
-        {/* Action buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
           {onOpenSettings && (
             <button onClick={onOpenSettings} title="Settings" style={iconBtn}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
             </button>
           )}
-          <button onClick={onLogout} style={{ ...iconBtn, fontSize: 12, width: 'auto', padding: '0 11px' }}>
+          <button onClick={onLogout} style={{ ...iconBtn, width:'auto', padding:'0 12px', fontSize:12 }}>
             ออก
           </button>
         </div>
       </div>
 
-      {/* ── Page content ── */}
-      <div style={{ maxWidth: 960, margin: '0 auto', padding: '28px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* ── Content ───────────────────────────────────────── */}
+      <div style={{ maxWidth:960, margin:'0 auto', padding:'24px 20px', display:'flex', flexDirection:'column', gap:16 }}>
 
-        {/* ── Hero card: Tank + Stats ── */}
-        <div className="hero-card" style={{
-          background: 'linear-gradient(135deg, #0d1f38 0%, #0a1828 50%, #0d1f38 100%)',
-          border: '1px solid rgba(148,163,184,0.1)',
-          borderRadius: 20,
-          padding: '28px 28px',
-          boxShadow: `0 0 0 1px rgba(0,0,0,.3), 0 8px 40px rgba(0,0,0,.5), 0 0 80px ${color}18`,
-          display: 'flex', gap: 28, flexWrap: 'wrap', alignItems: 'center',
-          position: 'relative', overflow: 'hidden',
+        {/* ── Hero card (dark) ── */}
+        <div className="anim-1" style={{
+          background: 'linear-gradient(135deg, #1a3050 0%, #0f1e35 60%, #152840 100%)',
+          borderRadius:20, padding:'28px 28px',
+          boxShadow:'0 4px 24px rgba(15,30,53,.35)',
+          display:'flex', gap:24, flexWrap:'wrap', alignItems:'center',
+          position:'relative', overflow:'hidden',
         }}>
-          {/* subtle radial glow behind tank */}
+          {/* Soft radial glow behind tank */}
           <div style={{
-            position: 'absolute', top: '50%', left: 140,
-            width: 280, height: 280,
-            background: `radial-gradient(circle, ${color}1a 0%, transparent 70%)`,
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-          }} />
+            position:'absolute', top:'50%', left:150,
+            width:260, height:260,
+            background:`radial-gradient(circle, ${color}22 0%, transparent 70%)`,
+            transform:'translate(-50%,-50%)', pointerEvents:'none',
+          }}/>
 
-          {/* Tank gauge with drop-shadow glow */}
-          <div style={{ position: 'relative', zIndex: 1, filter: `drop-shadow(0 0 28px ${color}50)` }}>
+          {/* Tank */}
+          <div style={{ position:'relative', zIndex:1, filter:`drop-shadow(0 0 18px ${color}45)` }}>
             <TankGauge
               pondWidth={Math.sqrt(pond.area)}
               pondDepth={pond.depth}
@@ -259,193 +248,150 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
             />
           </div>
 
-          {/* Stats grid */}
-          <div style={{ flex: 1, minWidth: 200, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px 28px', position: 'relative', zIndex: 1 }}>
-            <HeroStat
-              label="ระดับน้ำ"
-              value={pct != null ? pct.toFixed(1) : null}
-              unit="%"
-              accent={color}
-            />
-            <HeroStat
-              label="ความสูงน้ำ"
-              value={waterHeight != null ? Math.max(0,waterHeight).toFixed(1) : null}
-              unit="ซม."
-              accent="#38bdf8"
-            />
-            <HeroStat
-              label="ปริมาณน้ำ"
-              value={volume != null ? Math.max(0,volume).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : null}
-              unit="ม³"
-              accent="#818cf8"
-            />
-            <HeroStat
-              label="ระยะเซนเซอร์"
-              value={dist != null ? dist.toFixed(1) : null}
-              unit="ซม."
-              accent="#64748b"
-            />
+          {/* Stats */}
+          <div style={{ flex:1, minWidth:180, display:'grid', gridTemplateColumns:'1fr 1fr', gap:'22px 32px', zIndex:1 }}>
+            <HeroStat label="ระดับน้ำ"     value={pct!=null ? pct.toFixed(1) : null}                                                                         unit="%"   accent={color}     />
+            <HeroStat label="ความสูงน้ำ"   value={waterHeight!=null ? Math.max(0,waterHeight).toFixed(1) : null}                                             unit="ซม." accent="#7dd3fc"   />
+            <HeroStat label="ปริมาณน้ำ"    value={volume!=null ? Math.max(0,volume).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) : null} unit="ม³"  accent="#a5b4fc"   />
+            <HeroStat label="ระยะเซนเซอร์" value={dist!=null ? dist.toFixed(1) : null}                                                                       unit="ซม." accent="rgba(255,255,255,0.5)" />
           </div>
         </div>
 
-        {/* ── Level History card ── */}
-        <div className="chart-card" style={{
-          background: '#0d1929',
-          border: '1px solid rgba(148,163,184,0.08)',
-          borderRadius: 20,
-          boxShadow: '0 4px 32px rgba(0,0,0,.4)',
-          overflow: 'hidden',
+        {/* ── Level History card (light) ── */}
+        <div className="anim-2" style={{
+          background:'#fff', borderRadius:20,
+          border:'1px solid #e8edf3',
+          boxShadow:'0 2px 16px rgba(15,30,53,.07)',
+          overflow:'hidden',
         }}>
 
           {/* Header */}
           <div style={{
-            padding: '18px 20px 14px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex', alignItems: 'center', gap: 10,
+            padding:'16px 20px',
+            borderBottom:'1px solid #f1f5f9',
+            display:'flex', alignItems:'center', gap:10,
           }}>
             <div style={{
-              width: 28, height: 28, borderRadius: 8,
-              background: `linear-gradient(135deg, ${color}30, ${color}10)`,
-              border: `1px solid ${color}30`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width:32, height:32, borderRadius:9,
+              background:`linear-gradient(135deg, ${color}20, ${color}08)`,
+              border:`1.5px solid ${color}30`,
+              display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0,
             }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
               </svg>
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#e2e8f0' }}>Level History</div>
-              <div style={{ fontSize: 11, color: '#334155', marginTop: 1 }}>{label}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#0f172a' }}>Level History</div>
+              <div style={{ fontSize:11, color:'#94a3b8', marginTop:1 }}>{fmtRange(start, end)}</div>
             </div>
-            <div style={{
-              marginLeft: 'auto',
-              fontSize: 11, fontWeight: 600,
-              color: loading ? '#38bdf8' : '#334155',
-              background: loading ? 'rgba(56,189,248,0.08)' : 'rgba(255,255,255,0.04)',
-              border: `1px solid ${loading ? 'rgba(56,189,248,0.2)' : 'rgba(255,255,255,0.07)'}`,
-              borderRadius: 20, padding: '3px 10px',
-            }}>
+            <div style={{ marginLeft:'auto', fontSize:11, fontWeight:600,
+              color: loading ? '#0284c7' : '#94a3b8',
+              background: loading ? '#e0f2fe' : '#f8fafc',
+              borderRadius:20, padding:'3px 10px' }}>
               {loading ? 'กำลังโหลด...' : `${data.length} readings`}
             </div>
           </div>
 
           {/* ── Filter bar ── */}
           <div style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center',
+            padding:'12px 20px',
+            borderBottom:'1px solid #f1f5f9',
+            display:'flex', flexWrap:'wrap', gap:6, alignItems:'center',
           }}>
             {PRESETS.map(p => {
-              const active = preset === p.id;
+              const active = preset===p.id;
               return (
-                <button
-                  key={p.id}
-                  onClick={() => setPreset(p.id)}
-                  style={{
-                    padding: '6px 16px', borderRadius: 20,
-                    fontSize: 12, fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all .2s',
-                    border: active ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                    background: active
-                      ? `linear-gradient(135deg, ${color}, ${color}cc)`
-                      : 'rgba(255,255,255,0.04)',
-                    color: active ? '#fff' : '#475569',
-                    boxShadow: active ? `0 0 20px ${color}50, 0 2px 8px ${color}30` : 'none',
-                  }}
-                >{p.label}</button>
+                <button key={p.id} onClick={() => setPreset(p.id)} style={{
+                  padding:'6px 16px', borderRadius:20,
+                  fontSize:12, fontWeight:700, cursor:'pointer',
+                  transition:'all .18s',
+                  border: active ? 'none' : '1.5px solid #e2e8f0',
+                  background: active ? color : '#f8fafc',
+                  color: active ? '#fff' : '#64748b',
+                  boxShadow: active ? `0 2px 10px ${color}40` : 'none',
+                }}>{p.label}</button>
               );
             })}
 
-            {/* Custom date inputs */}
-            {preset === 'custom' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 4, flexWrap: 'wrap' }}>
-                <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,0.08)' }} />
-                <input
-                  type="date"
-                  value={cStart}
-                  max={cEnd || todayStr}
-                  onChange={e => setCStart(e.target.value)}
-                  style={dateInput}
-                />
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round">
-                  <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+            {preset==='custom' && (
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginLeft:4, flexWrap:'wrap' }}>
+                <div style={{ width:1, height:18, background:'#e2e8f0' }}/>
+                <input type="date" value={cStart} max={cEnd||todayStr}
+                  onChange={e=>setCStart(e.target.value)} style={dateInput}/>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                  <polyline points="12 5 19 12 12 19"/>
                 </svg>
-                <input
-                  type="date"
-                  value={cEnd}
-                  min={cStart}
-                  max={todayStr}
-                  onChange={e => setCEnd(e.target.value)}
-                  style={dateInput}
-                />
+                <input type="date" value={cEnd} min={cStart} max={todayStr}
+                  onChange={e=>setCEnd(e.target.value)} style={dateInput}/>
               </div>
             )}
           </div>
 
           {/* Stats avg / min / max */}
-          {data.length > 0 && (
-            <div style={{ display: 'flex', gap: 8, padding: '14px 20px 0' }}>
-              <MiniStat label="เฉลี่ย" value={avg}  accent={color}     />
-              <MiniStat label="ต่ำสุด" value={dMin} accent="#22c55e"   />
-              <MiniStat label="สูงสุด" value={dMax} accent="#f87171"   />
+          {data.length>0 && (
+            <div style={{ display:'flex', gap:8, padding:'14px 20px 0' }}>
+              <StatPill label="เฉลี่ย" value={avg}  accent={color}     />
+              <StatPill label="ต่ำสุด" value={dMin} accent="#16a34a"   />
+              <StatPill label="สูงสุด" value={dMax} accent="#dc2626"   />
             </div>
           )}
 
           {/* Chart */}
-          <div style={{ padding: '12px 8px 20px' }}>
+          <div style={{ padding:'12px 8px 20px' }}>
             {loading ? (
-              <div style={{
-                height: 140, borderRadius: 10,
-                background: 'linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%)',
-                backgroundSize: '400px 100%',
-                animation: 'shimmer 1.4s infinite',
-              }} />
-            ) : chartData.length >= 2 ? (
-              <ResponsiveContainer width="100%" height={170}>
-                <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+              <div style={{ height:150, borderRadius:12, background:'#f8fafc',
+                display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                  {[0,.15,.3].map(d => (
+                    <div key={d} style={{
+                      width:8, height:8, borderRadius:'50%', background:color,
+                      animation:`blink 1.2s ${d}s ease-in-out infinite`,
+                    }}/>
+                  ))}
+                </div>
+              </div>
+            ) : chartData.length>=2 ? (
+              <ResponsiveContainer width="100%" height={175}>
+                <AreaChart data={chartData} margin={{ top:6, right:12, left:0, bottom:0 }}>
                   <defs>
                     <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%"   stopColor={color} stopOpacity={0.45} />
-                      <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+                      <stop offset="0%"   stopColor={color} stopOpacity={0.18}/>
+                      <stop offset="100%" stopColor={color} stopOpacity={0}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <CartesianGrid strokeDasharray="4 4" stroke="#f1f5f9" vertical={false}/>
                   <XAxis
-                    dataKey="time"
-                    type="number"
-                    scale="time"
+                    dataKey="time" type="number" scale="time"
                     domain={['dataMin','dataMax']}
                     ticks={ticks}
                     tickFormatter={ts => fmtTick(ts, rangeHours)}
-                    tick={{ fontSize: 10, fill: '#334155' }}
-                    axisLine={false}
-                    tickLine={false}
-                    minTickGap={36}
+                    tick={{ fontSize:11, fill:'#94a3b8' }}
+                    axisLine={false} tickLine={false} minTickGap={36}
                   />
                   <YAxis
-                    domain={[0, 100]}
-                    tick={{ fontSize: 10, fill: '#334155' }}
+                    domain={[0,100]}
+                    tick={{ fontSize:11, fill:'#94a3b8' }}
                     tickFormatter={v => `${v}%`}
-                    width={36}
-                    axisLine={false}
-                    tickLine={false}
+                    width={36} axisLine={false} tickLine={false}
                   />
                   <Tooltip
                     content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
+                      if (!active||!payload?.length) return null;
                       const d = payload[0].payload;
                       return (
                         <div style={{
-                          background: '#0a1525',
-                          border: `1px solid ${color}40`,
-                          padding: '8px 12px', borderRadius: 10, fontSize: 12,
-                          boxShadow: `0 4px 20px rgba(0,0,0,.5), 0 0 12px ${color}20`,
+                          background:'#fff', border:`1px solid #e2e8f0`,
+                          padding:'8px 12px', borderRadius:10, fontSize:12,
+                          boxShadow:'0 4px 16px rgba(0,0,0,.1)',
                         }}>
-                          <div style={{ fontWeight: 800, color: color, fontSize: 16 }}>
+                          <div style={{ fontWeight:800, color, fontSize:16 }}>
                             {d.v?.toFixed(1)}%
                           </div>
-                          <div style={{ color: '#475569', marginTop: 2, fontSize: 11 }}>
+                          <div style={{ color:'#94a3b8', marginTop:2, fontSize:11 }}>
                             {fmtTT(d.time, rangeHours)}
                           </div>
                         </div>
@@ -453,31 +399,34 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
                     }}
                   />
                   <Area
-                    type="monotone"
-                    dataKey="v"
-                    stroke={color}
-                    strokeWidth={2.5}
+                    type="monotone" dataKey="v"
+                    stroke={color} strokeWidth={2.5}
                     fill={`url(#${gradId})`}
-                    dot={false}
-                    isAnimationActive={false}
+                    dot={false} isAnimationActive={false}
                   />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div style={{
-                height: 130, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 8,
-                background: 'rgba(255,255,255,0.02)', borderRadius: 12,
+                height:130, display:'flex', flexDirection:'column',
+                alignItems:'center', justifyContent:'center', gap:8,
+                background:'#f8fafc', borderRadius:12,
               }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="1.5" strokeLinecap="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none"
+                  stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2"/>
+                  <line x1="16" y1="2" x2="16" y2="6"/>
+                  <line x1="8"  y1="2" x2="8"  y2="6"/>
+                  <line x1="3"  y1="10" x2="21" y2="10"/>
                 </svg>
-                <span style={{ fontSize: 13, color: '#1e3a5f', fontWeight: 500 }}>ไม่มีข้อมูลสำหรับช่วงวันที่เลือก</span>
+                <span style={{ fontSize:13, color:'#94a3b8', fontWeight:500 }}>
+                  ไม่มีข้อมูลสำหรับช่วงวันที่เลือก
+                </span>
               </div>
             )}
           </div>
 
-        </div>{/* end chart card */}
+        </div>
       </div>
     </div>
   );
@@ -486,14 +435,13 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
 // ── Styles ─────────────────────────────────────────────────────────────────────
 
 const iconBtn = {
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
-  borderRadius: 8, width: 32, height: 32, cursor: 'pointer', color: '#64748b', padding: 0,
+  display:'flex', alignItems:'center', justifyContent:'center',
+  background:'#f8fafc', border:'1px solid #e2e8f0',
+  borderRadius:8, width:32, height:32, cursor:'pointer', color:'#64748b', padding:0,
 };
 
 const dateInput = {
-  padding: '5px 10px', borderRadius: 8, fontSize: 12,
-  border: '1px solid rgba(255,255,255,0.1)',
-  color: '#94a3b8', background: 'rgba(255,255,255,0.05)',
-  outline: 'none', colorScheme: 'dark', cursor: 'pointer',
+  padding:'5px 10px', borderRadius:8, fontSize:12,
+  border:'1.5px solid #e2e8f0', color:'#374151',
+  background:'#f8fafc', outline:'none', cursor:'pointer',
 };
