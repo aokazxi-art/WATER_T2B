@@ -211,8 +211,7 @@ export default function PondDetailPage({ pondId, getPondState, updatePond, onBac
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Stat label="ระดับน้ำ"     value={pct      != null ? pct.toFixed(1)                                                                                     : '—'} unit="%" color={color} />
               <Stat label="ความสูงน้ำ"   value={waterHeight != null ? Math.max(0, waterHeight).toFixed(1)                                                     : '—'} unit="ซม." />
-              <Stat label="ปริมาณน้ำ"    value={volume   != null ? Math.max(0, volume).toLocaleString('en-US', { maximumFractionDigits: 0 })                  : '—'} unit="ลิตร" minWidth={170} />
-              <Stat label="ปริมาณน้ำ"    value={volume   != null ? (Math.max(0, volume) / 1000).toLocaleString('en-US', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) : '—'} unit="ตัน" minWidth={170} />
+              <Stat label="ปริมาณน้ำ"    value={volume   != null ? Math.max(0, volume).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'} unit="ม³" minWidth={170} />
               <Stat label="ระยะเซนเซอร์" value={dist     != null ? dist.toFixed(1)                                                                            : '—'} unit="ซม." />
             </div>
 

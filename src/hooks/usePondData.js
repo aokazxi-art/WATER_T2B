@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ref, onValue, get, set as fbSet, update as fbUpdate, remove as fbRemove, push as fbPush } from 'firebase/database';
 import { db } from '../firebase';
-import { calcWaterHeight, calcWaterPercent, calcVolumeLiters, getStatus } from '../utils/waterLevel';
+import { calcWaterHeight, calcWaterPercent, calcVolumeM3, getStatus } from '../utils/waterLevel';
 
 const HISTORY_SIZE = 20;
 const REGISTRY = 'pond_registry'; // source of truth ข้ามเครื่อง
@@ -220,7 +220,7 @@ export function usePondData() {
     if (dist == null) return { pond, dist: null, waterHeight: null, pct: null, volume: null, status: 'loading', battery, history: histories[id] || [] };
     const waterHeight = calcWaterHeight(dist, pond.depth, pond.sensorOffset);
     const pct    = calcWaterPercent(waterHeight, pond.depth);
-    const volume = calcVolumeLiters(pond.area, waterHeight);
+    const volume = calcVolumeM3(pond.area, waterHeight);
     const status = getStatus(pct, pond.thresholdYellow, pond.thresholdRed);
     return { pond, dist, waterHeight, pct, volume, status, battery, history: histories[id] || [] };
   }, [ponds, sensorDistances, sensorMeta, histories]);

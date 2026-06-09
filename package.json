@@ -10,8 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "express": "^5.2.1",
     "firebase": "^12.14.0",
-    "mqtt": "^5.10.1",
+    "mqtt": "^5.15.1",
+    "node-fetch": "^3.3.2",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1"

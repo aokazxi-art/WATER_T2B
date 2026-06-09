@@ -10,14 +10,9 @@ export function calcWaterPercent(waterHeight, pondDepth) {
   return Math.min(100, Math.max(0, pct));
 }
 
-// คำนวณปริมาตรน้ำ (area หน่วย ซม², waterHeight หน่วย ซม → ลิตร)
-export function calcVolumeLiters(area, waterHeight) {
-  return (area * waterHeight) / 1000;
-}
-
-// แปลงลิตร → ตัน (น้ำ 1 ลิตร = 1 กก. = 0.001 ตัน)
-export function calcVolumeTons(volumeLiters) {
-  return volumeLiters / 1000;
+// คำนวณปริมาตรน้ำ (area หน่วย ซม², waterHeight หน่วย ซม → ลูกบาศก์เมตร)
+export function calcVolumeM3(area, waterHeight) {
+  return (area * waterHeight) / 1_000_000;
 }
 
 // คืนสถานะ 'normal' | 'warning' | 'danger' จาก % และค่า threshold ที่ตั้งไว้
