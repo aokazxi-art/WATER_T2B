@@ -242,14 +242,23 @@ function GatewayCard({ gateway, onRemove, onUpdate }) {
 
 // ─── Sensor card ──────────────────────────────────────────────────────────────
 
-function SensorCard({ pond, meta, gateways, onRemove, updatePond }) {
+function SensorCard({ pond, meta, gateways, onRemove, updatePond, onClearHistory }) {
   const st = getSensorStatus(meta?.timestamp);
   const stStyle = STATUS[st];
 
-  const [draftEUI, setDraftEUI]   = useState(pond.deviceId ?? '');
-  const [euiSaved, setEuiSaved]   = useState(false);
+  const [draftEUI,     setDraftEUI]     = useState(pond.deviceId ?? '');
+  const [euiSaved,     setEuiSaved]     = useState(false);
+  const [showConfirm,  setShowConfirm]  = useState(false);
+  const [clearing,     setClearing]     = useState(false);
 
   useEffect(() => { setDraftEUI(pond.deviceId ?? ''); }, [pond.deviceId]);
+
+  async function handleClearHistory() {
+    setClearing(true);
+    await onClearHistory(pond.id);
+    setClearing(false);
+    setShowConfirm(false);
+  }
 
   function handleSaveEUI() {
     updatePond(pond.id, { deviceId: draftEUI.trim() });
@@ -280,6 +289,7 @@ function SensorCard({ pond, meta, gateways, onRemove, updatePond }) {
             }}>via {linkedGW.name}</span>
           )}
         </div>
+        <IconBtn onClick={() => setShowConfirm(v => !v)} title="ล้างประวัติ" icon="🗑" color="#f59e0b" borderColor="#fde68a" />
         <IconBtn onClick={onRemove} title="ลบ sensor และบ่อ" icon="✕" color="#ef4444" borderColor="#fca5a5" />
       </div>
 
@@ -369,6 +379,42 @@ function SensorCard({ pond, meta, gateways, onRemove, updatePond }) {
           </div>
         )}
       </div>
+
+      {/* Confirmation: ล้างประวัติ */}
+      {showConfirm && (
+        <div style={{
+          marginTop: 12, background: '#fff7ed', borderRadius: 10,
+          border: '1.5px solid #fed7aa', padding: '12px 14px',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#c2410c', marginBottom: 4 }}>
+            ล้างประวัติข้อมูลของ "{pond.name}"?
+          </div>
+          <div style={{ fontSize: 12, color: '#92400e', marginBottom: 12, lineHeight: 1.5 }}>
+            ข้อมูลประวัติทั้งหมด (กราฟ, ตาราง) จะถูกลบถาวรทั้งใน Firestore และ localStorage<br />
+            ไม่สามารถกู้คืนได้
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowConfirm(false)}
+              disabled={clearing}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0',
+                background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 12, cursor: 'pointer',
+              }}
+            >ยกเลิก</button>
+            <button
+              onClick={handleClearHistory}
+              disabled={clearing}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: 'none',
+                background: clearing ? '#94a3b8' : '#ea580c',
+                color: '#fff', fontWeight: 700, fontSize: 12, cursor: clearing ? 'wait' : 'pointer',
+                minWidth: 110,
+              }}
+            >{clearing ? 'กำลังล้าง...' : 'ยืนยัน ล้างประวัติ'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -437,7 +483,7 @@ function AddSensorForm({ gateways, onCancel, onSubmit }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack, addPond, removePond, updatePond }) {
+export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack, addPond, removePond, updatePond, clearPondHistory }) {
   const [gateways, setGateways]         = useState(loadGateways);
   const [addingGW, setAddingGW]         = useState(false);
   const [addingSensor, setAddingSensor] = useState(false);
@@ -516,7 +562,7 @@ export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack,
               width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
               background: isConnected ? '#16a34a' : '#dc2626',
             }} />
-            <span style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', flex: 1 }}>Firebase Realtime Database</span>
+            <span style={{ fontWeight: 600, fontSize: 14, color: '#0f172a', flex: 1 }}>Firebase Firestore</span>
             <span style={{
               fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 4,
               background: isConnected ? '#f0fdf4' : '#fef2f2',
@@ -525,8 +571,7 @@ export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack,
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: '#64748b' }}>
             <div><span style={{ color: '#94a3b8' }}>Project: </span><code style={{ color: '#334155' }}>{firebaseConfig.projectId}</code></div>
-            <div><span style={{ color: '#94a3b8' }}>Database: </span><code style={{ color: '#334155', wordBreak: 'break-all' }}>{firebaseConfig.databaseURL}</code></div>
-            <div><span style={{ color: '#94a3b8' }}>Region: </span><code style={{ color: '#334155' }}>asia-southeast1</code></div>
+            <div><span style={{ color: '#94a3b8' }}>Region: </span><code style={{ color: '#334155' }}>asia-southeast1 (default)</code></div>
           </div>
         </div>
 
@@ -581,6 +626,7 @@ export default function ConnectionPage({ ponds, sensorMeta, isConnected, onBack,
             gateways={gateways}
             onRemove={() => removePond(pond.id)}
             updatePond={updatePond}
+            onClearHistory={clearPondHistory}
           />
         ))}
 

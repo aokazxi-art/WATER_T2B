@@ -9,7 +9,7 @@ import { usePondData } from './hooks/usePondData';
 import { loadSession, clearSession } from './auth/auth';
 
 export default function App() {
-  const { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected } = usePondData();
+  const { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected, clearPondHistory } = usePondData();
 
   const [user, setUser] = useState(loadSession);           // null = ยังไม่ login
   const [page, setPage] = useState('home');
@@ -46,6 +46,7 @@ export default function App() {
         addPond={addPond}
         removePond={removePond}
         updatePond={updatePond}
+        clearPondHistory={clearPondHistory}
         user={user}
         onLogout={handleLogout}
       />

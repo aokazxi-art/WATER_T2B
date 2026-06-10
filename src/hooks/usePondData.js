@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, doc, onSnapshot, getDocs,
   setDoc, updateDoc, deleteDoc, addDoc,
-  query, where,
+  query, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeM3, getStatus } from '../utils/waterLevel';
@@ -245,6 +245,28 @@ export function usePondData() {
     setHistories(prev =>       { const n = { ...prev }; delete n[id]; return n; });
   }, []);
 
+  const clearPondHistory = useCallback(async (id) => {
+    // 1. ล้าง in-memory histories
+    setHistories(prev => ({ ...prev, [id]: [] }));
+
+    // 2. ล้าง localStorage daily history
+    const prefix = `water_daily_${id}_`;
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(prefix))
+      .forEach(k => localStorage.removeItem(k));
+
+    // 3. ล้าง Firestore history subcollection (batch delete, max 500 ต่อ batch)
+    try {
+      const snap = await getDocs(collection(db, 'history', `pond_${id}`, 'readings'));
+      const docs = snap.docs;
+      for (let i = 0; i < docs.length; i += 500) {
+        const batch = writeBatch(db);
+        docs.slice(i, i + 500).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (_) {}
+  }, []);
+
   const getPondState = useCallback((id) => {
     const pond = ponds.find(p => p.id === id);
     if (!pond) return null;
@@ -258,5 +280,5 @@ export function usePondData() {
     return { pond, dist, waterHeight, pct, volume, status, battery, history: histories[id] || [] };
   }, [ponds, sensorDistances, sensorMeta, histories]);
 
-  return { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected };
+  return { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected, clearPondHistory };
 }
