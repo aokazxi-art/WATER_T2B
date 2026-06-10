@@ -121,8 +121,15 @@ export async function loadDailyHistoryAsync(pondId, date) {
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
+// การันตีว่า ponds จะมีบ่อครบตาม DEFAULT_PONDS เสมอ
+function mergeWithDefaults(list) {
+  const map = new Map(DEFAULT_PONDS.map(p => [p.id, { ...DEFAULT_FIELDS, ...p }]));
+  list.forEach(p => { if (p.id != null) map.set(p.id, { ...map.get(p.id), ...p }); });
+  return [...map.values()].sort((a, b) => a.id - b.id);
+}
+
 export function usePondData() {
-  const [ponds, setPonds]                     = useState(loadPonds);
+  const [ponds, setPonds]                     = useState(() => mergeWithDefaults(loadPonds()));
   const [sensorDistances, setSensorDistances] = useState(loadSensorDistances);
   const [sensorMeta, setSensorMeta]           = useState(loadSensorMeta);
   const [histories, setHistories]             = useState(() =>
@@ -168,10 +175,10 @@ export function usePondData() {
 
       const fbPonds = snapshot.docs
         .map(d => ({ ...DEFAULT_FIELDS, ...d.data() }))
-        .filter(p => p.id != null)
-        .sort((a, b) => a.id - b.id);
+        .filter(p => p.id != null);
 
-      if (fbPonds.length > 0) setPonds(fbPonds);
+      // Merge กับ DEFAULT_PONDS เพื่อการันตีว่าบ่อครบเสมอ
+      setPonds(mergeWithDefaults(fbPonds));
     });
 
     return () => unsub();
