@@ -175,7 +175,13 @@ export function usePondData() {
 
         const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
         const pct   = calcWaterPercent(wh, p.depth);
-        const entry = { pct, time: receivedAt, battery: data.battery ?? null };
+        const entry = {
+          pct,
+          time: receivedAt,
+          battery: data.battery ?? null,
+          dist: +dist.toFixed(1),
+          wh: +Math.max(0, wh).toFixed(2),
+        };
         appendDailyHistory(p.id, entry);
 
         setHistories(prev => {
