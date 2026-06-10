@@ -1,10 +1,9 @@
 import { initializeApp } from "firebase/app";
-import { getDatabase } from "firebase/database";
+import { getFirestore } from "firebase/firestore";
 
 export const firebaseConfig = {
   apiKey: "AIzaSyASAWkCGV7Vjg38mBP1w7N0WHlErRf87nw",
   authDomain: "gen-lang-client-0103823618.firebaseapp.com",
-  databaseURL: "https://gen-lang-client-0103823618-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "gen-lang-client-0103823618",
   storageBucket: "gen-lang-client-0103823618.firebasestorage.app",
   messagingSenderId: "459966832920",
@@ -12,4 +11,4 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getDatabase(app);
+export const db = getFirestore(app);

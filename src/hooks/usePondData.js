@@ -1,19 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ref, onValue, get, set as fbSet, update as fbUpdate, remove as fbRemove, push as fbPush } from 'firebase/database';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  collection, doc, onSnapshot, getDocs,
+  setDoc, updateDoc, deleteDoc, addDoc,
+  query, where,
+} from 'firebase/firestore';
 import { db } from '../firebase';
 import { calcWaterHeight, calcWaterPercent, calcVolumeM3, getStatus } from '../utils/waterLevel';
 
 const HISTORY_SIZE = 20;
-const REGISTRY = 'pond_registry'; // source of truth ข้ามเครื่อง
 
-// ค่า default ที่ใช้เติมฟิลด์ที่ขาดหายเมื่อ merge จาก Firebase
 const DEFAULT_FIELDS = {
   depth: 100, area: 10000, sensorOffset: 30,
   thresholdYellow: 70, thresholdRed: 80,
   deviceId: '', gatewayId: null, sensorModel: '',
 };
 
-// area หน่วย ซม², depth หน่วย ซม., sensorOffset หน่วย ซม.
 const DEFAULT_PONDS = [
   { id: 1, name: 'Pond A', depth: 150, area: 120000, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '', gatewayId: null },
   { id: 2, name: 'Pond B', depth: 120, area:  87500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 80, deviceId: '', gatewayId: null },
@@ -21,7 +22,7 @@ const DEFAULT_PONDS = [
   { id: 4, name: 'Pond D', depth: 180, area: 157500, sensorOffset: 30, thresholdYellow: 70, thresholdRed: 85, deviceId: '', gatewayId: null },
 ];
 
-// ─── localStorage helpers (cache สำหรับ offline) ─────────────────────────────
+// ─── localStorage helpers ─────────────────────────────────────────────────────
 
 function loadPonds() {
   try {
@@ -83,7 +84,7 @@ function appendDailyHistory(pondId, entry) {
     arr.push(entry);
     localStorage.setItem(lsKey, JSON.stringify(arr.slice(-500)));
   } catch (_) {}
-  fbPush(ref(db, `pond_history/${pondId}/${dateKey}`), entry).catch(() => {});
+  addDoc(collection(db, 'history', `pond_${pondId}`, 'readings'), { ...entry, date: dateKey }).catch(() => {});
 }
 
 export function loadDailyHistory(pondId, date) {
@@ -103,13 +104,16 @@ export async function loadDailyHistoryAsync(pondId, date) {
     }
   } catch (_) {}
   try {
-    const snap = await get(ref(db, `pond_history/${pondId}/${dateKey}`));
-    const data = snap.val();
-    if (data && typeof data === 'object') {
-      const arr = Object.values(data).sort((a, b) => a.time - b.time);
+    const q = query(
+      collection(db, 'history', `pond_${pondId}`, 'readings'),
+      where('date', '==', dateKey)
+    );
+    const snapshot = await getDocs(q);
+    const arr = snapshot.docs.map(d => d.data()).sort((a, b) => a.time - b.time);
+    if (arr.length > 0) {
       try { localStorage.setItem(lsKey, JSON.stringify(arr)); } catch (_) {}
-      return arr;
     }
+    return arr;
   } catch (_) {}
   return [];
 }
@@ -117,102 +121,123 @@ export async function loadDailyHistoryAsync(pondId, date) {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function usePondData() {
-  const [ponds, setPonds]                 = useState(loadPonds);
+  const [ponds, setPonds]                     = useState(loadPonds);
   const [sensorDistances, setSensorDistances] = useState(loadSensorDistances);
-  const [sensorMeta, setSensorMeta]       = useState(loadSensorMeta);
-  const [histories, setHistories]         = useState(() =>
+  const [sensorMeta, setSensorMeta]           = useState(loadSensorMeta);
+  const [histories, setHistories]             = useState(() =>
     Object.fromEntries(loadPonds().map(p => [p.id, []]))
   );
-  const [isConnected, setIsConnected]     = useState(false);
+  const [isConnected, setIsConnected]         = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
 
-  // localStorage cache — อัปเดตทุกครั้งที่ state เปลี่ยน
-  useEffect(() => { savePonds(ponds); },             [ponds]);
+  const pondsRef              = useRef(ponds);
+  const lastReadingTimestamps = useRef({});
+
+  // localStorage cache
+  useEffect(() => { savePonds(ponds); pondsRef.current = ponds; }, [ponds]);
   useEffect(() => { saveSensorDistances(sensorDistances); }, [sensorDistances]);
-  useEffect(() => { saveSensorMeta(sensorMeta); },   [sensorMeta]);
+  useEffect(() => { saveSensorMeta(sensorMeta); },           [sensorMeta]);
 
-  // ── Firebase connection status ──────────────────────────────────────────────
+  // ── Network status ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const connRef = ref(db, '.info/connected');
-    return onValue(connRef, snap => setIsConnected(snap.val() === true));
+    const handleOnline  = () => setIsConnected(true);
+    const handleOffline = () => setIsConnected(false);
+    window.addEventListener('online',  handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online',  handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
-  // ── pond_registry: real-time listener (source of truth ข้ามเครื่อง) ─────────
-  // ฟัง real-time ทุกครั้งที่ใครแก้ไข/เพิ่ม/ลบบ่อจากเครื่องใดก็ตาม
+  // ── Firestore ponds collection listener ────────────────────────────────────
+  // Document ID: pond_{id}  ·  Fields: pond config + last_reading (sensor data)
   useEffect(() => {
-    const registryRef = ref(db, REGISTRY);
-    const unsub = onValue(registryRef, snapshot => {
-      const data = snapshot.val();
-      if (data && typeof data === 'object') {
-        // Firebase มีข้อมูล → ใช้เป็น source of truth
-        const fbPonds = Object.values(data)
-          .map(p => ({ ...DEFAULT_FIELDS, ...p }))
-          .sort((a, b) => a.id - b.id);
-        setPonds(fbPonds);
-      } else {
-        // Firebase ว่าง (เปิดครั้งแรก) → push ข้อมูล local ขึ้นไป
-        const localPonds = loadPonds();
-        const batch = {};
-        localPonds.forEach(p => { batch[p.id] = p; });
-        fbUpdate(ref(db, REGISTRY), batch).catch(() => {});
+    let initialized = false;
+
+    const unsub = onSnapshot(collection(db, 'ponds'), snapshot => {
+      setIsConnected(true);
+
+      // Firestore ว่าง (เปิดครั้งแรก) → push ค่า default ขึ้นไป
+      if (snapshot.empty && !initialized) {
+        initialized = true;
+        loadPonds().forEach(p => {
+          setDoc(doc(db, 'ponds', `pond_${p.id}`), p).catch(() => {});
+        });
+        return;
       }
+      initialized = true;
+
+      // อัปเดต pond config (กรอง last_reading ออก)
+      const fbPonds = snapshot.docs
+        .map(d => {
+          const { last_reading, ...config } = d.data();
+          return { ...DEFAULT_FIELDS, ...config };
+        })
+        .filter(p => p.id != null)
+        .sort((a, b) => a.id - b.id);
+
+      if (fbPonds.length > 0) setPonds(fbPonds);
+
+      // อัปเดต sensor readings (เฉพาะ doc ที่มี last_reading)
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'removed') return;
+        const data    = change.doc.data();
+        const pondId  = data.id;
+        const reading = data.last_reading;
+        if (!reading || pondId == null) return;
+
+        const dist       = reading.raw_cm;
+        const receivedAt = reading.timestamp || Date.now();
+
+        setSensorDistances(prev => ({ ...prev, [pondId]: dist }));
+        setSensorMeta(prev => ({ ...prev, [pondId]: { timestamp: receivedAt, battery: reading.battery ?? null } }));
+
+        // บันทึก history เฉพาะเมื่อ timestamp เปลี่ยน (reading ใหม่)
+        if (reading.timestamp !== lastReadingTimestamps.current[pondId]) {
+          lastReadingTimestamps.current[pondId] = reading.timestamp;
+
+          const { last_reading: _lr, ...pondConfig } = data;
+          const merged = { ...DEFAULT_FIELDS, ...pondConfig };
+          const wh    = calcWaterHeight(dist, merged.depth, merged.sensorOffset);
+          const pct   = calcWaterPercent(wh, merged.depth);
+          const entry = {
+            pct,
+            time:    receivedAt,
+            battery: reading.battery ?? null,
+            dist:    +dist.toFixed(1),
+            wh:      +Math.max(0, wh).toFixed(2),
+          };
+          appendDailyHistory(pondId, entry);
+          setHistories(prev => {
+            const arr = [...(prev[pondId] || []), entry];
+            return { ...prev, [pondId]: arr.slice(-HISTORY_SIZE) };
+          });
+        }
+      });
     });
+
     return () => unsub();
   }, []);
 
-  // ── Sensor data listener ────────────────────────────────────────────────────
-  useEffect(() => {
-    const unsubscribes = ponds.map(p => {
-      const sensorRef = ref(db, `ponds/pond_${p.id}/last_reading`);
-      return onValue(sensorRef, snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
-
-        const dist       = data.raw_cm;
-        const receivedAt = Date.now();
-
-        setSensorDistances(prev => ({ ...prev, [p.id]: dist }));
-        setSensorMeta(prev => ({ ...prev, [p.id]: { timestamp: receivedAt, battery: data.battery ?? null } }));
-
-        const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
-        const pct   = calcWaterPercent(wh, p.depth);
-        const entry = {
-          pct,
-          time: receivedAt,
-          battery: data.battery ?? null,
-          dist: +dist.toFixed(1),
-          wh: +Math.max(0, wh).toFixed(2),
-        };
-        appendDailyHistory(p.id, entry);
-
-        setHistories(prev => {
-          const arr = [...(prev[p.id] || []), entry];
-          return { ...prev, [p.id]: arr.slice(-HISTORY_SIZE) };
-        });
-      });
-    });
-    return () => unsubscribes.forEach(u => u());
-  }, [ponds]);
-
   // ── CRUD ────────────────────────────────────────────────────────────────────
 
-  // เขียนลง pond_registry → onValue listener จะ push กลับมาทุกเครื่องอัตโนมัติ
   const updatePond = useCallback((id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p)); // optimistic
-    fbUpdate(ref(db, `${REGISTRY}/${id}`), updates).catch(() => {});
+    updateDoc(doc(db, 'ponds', `pond_${id}`), updates).catch(() => {});
   }, []);
 
   const addPond = useCallback((name, deviceId = '', gatewayId = null) => {
-    setPonds(prev => {
-      const newId   = Math.max(0, ...prev.map(p => p.id)) + 1;
-      const newPond = { ...DEFAULT_FIELDS, id: newId, name, deviceId, gatewayId };
-      fbSet(ref(db, `${REGISTRY}/${newId}`), newPond).catch(() => {}); // listener จะ push กลับมา
-      return [...prev, newPond]; // optimistic local update
-    });
+    const newId   = Math.max(0, ...pondsRef.current.map(p => p.id)) + 1;
+    const newPond = { ...DEFAULT_FIELDS, id: newId, name, deviceId, gatewayId };
+    setPonds(prev => [...prev, newPond]); // optimistic
+    setDoc(doc(db, 'ponds', `pond_${newId}`), newPond).catch(() => {});
   }, []);
 
   const removePond = useCallback((id) => {
     setPonds(prev => prev.filter(p => p.id !== id)); // optimistic
-    fbRemove(ref(db, `${REGISTRY}/${id}`)).catch(() => {}); // listener จะ sync กลับมา
+    deleteDoc(doc(db, 'ponds', `pond_${id}`)).catch(() => {});
     setSensorDistances(prev => { const n = { ...prev }; delete n[id]; return n; });
     setSensorMeta(prev =>      { const n = { ...prev }; delete n[id]; return n; });
     setHistories(prev =>       { const n = { ...prev }; delete n[id]; return n; });
