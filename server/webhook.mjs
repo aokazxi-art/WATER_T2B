@@ -1,23 +1,28 @@
 // ============================================================
 //  server/webhook.mjs
-//  รับ uplink event จาก ChirpStack webhook → เขียนเข้า Firebase
+//  รับ uplink event จาก ChirpStack webhook → เขียนเข้า Firestore
 //  รัน: node server/webhook.mjs
 // ============================================================
 
-import express              from "express";
-import { initializeApp }    from "firebase/app";
-import { getDatabase, ref, set } from "firebase/database";
+import express from "express";
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 // ────────────────────────────────────────────────────────────
 //  Firebase config
 // ────────────────────────────────────────────────────────────
 
 const firebaseConfig = {
-  databaseURL: "https://gen-lang-client-0103823618-default-rtdb.asia-southeast1.firebasedatabase.app",
+  apiKey:            "AIzaSyCI4NaqTuySWIsZHmNiMmgUet6ZWUkATis",
+  authDomain:        "t2bwater.firebaseapp.com",
+  projectId:         "t2bwater",
+  storageBucket:     "t2bwater.firebasestorage.app",
+  messagingSenderId: "857659938393",
+  appId:             "1:857659938393:web:d7c0b30e40a01f06a1c348",
 };
 
 const firebaseApp = initializeApp(firebaseConfig);
-const db          = getDatabase(firebaseApp);
+const db          = getFirestore(firebaseApp);
 
 // ────────────────────────────────────────────────────────────
 //  config บ่อ: ความลึก (cm) และพื้นที่หน้าตัด (cm²)
@@ -66,25 +71,19 @@ app.post("/webhook", async (req, res) => {
     const raw_cm  = buf.readUInt16BE(0);
     const battery = buf.readUInt8(2);
 
-    // คำนวณระดับน้ำ
-    const totalDist   = config.depth_cm + 30;
-    const waterHeight = totalDist - raw_cm;
-    const waterPct    = Math.round((waterHeight / config.depth_cm) * 100);
-    const volumeM3 = Math.round((config.area_cm2 * waterHeight) / 1_000_000 * 100) / 100;
+    // บันทึกเข้า Firestore  ponds/{pondId}
+    await setDoc(doc(db, "ponds", pondId), {
+      last_reading: {
+        raw_cm,
+        battery,
+        rssi:      payload.rxInfo?.[0]?.rssi ?? null,
+        snr:       payload.rxInfo?.[0]?.snr  ?? null,
+        timestamp: Date.now(),
+        updatedAt: serverTimestamp(),
+      },
+    }, { merge: true });
 
-    // บันทึกเข้า Firebase
-    await set(ref(db, `ponds/${pondId}/last_reading`), {
-      raw_cm,
-      water_height_cm: waterHeight,
-      water_pct:       waterPct,
-      volume_m3:       volumeM3,
-      battery,
-      rssi:      payload.rxInfo?.[0]?.rssi ?? null,
-      snr:       payload.rxInfo?.[0]?.snr  ?? null,
-      timestamp: Date.now(),
-    });
-
-    console.log(`✅ pond=${pondId}  raw=${raw_cm}cm  water=${waterPct}%  vol=${volumeM3}m³`);
+    console.log(`✅ pond=${pondId}  raw=${raw_cm}cm  battery=${battery}%`);
     return res.status(200).send("OK");
 
   } catch (err) {

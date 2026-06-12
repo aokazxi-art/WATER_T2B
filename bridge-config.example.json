@@ -7,6 +7,6 @@
     "password": ""
   },
   "firebase": {
-    "databaseURL": "https://gen-lang-client-0103823618-default-rtdb.asia-southeast1.firebasedatabase.app"
+    "databaseURL": "https://t2bwater-default-rtdb.asia-southeast1.firebasedatabase.app"
   }
 }
