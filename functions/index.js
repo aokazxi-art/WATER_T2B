@@ -19,7 +19,7 @@ const DEV_EUI_MAP = {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.chirpstackWebhook = onRequest({ region: "asia-southeast3" }, async (req, res) => {
+exports.chirpstackWebhook = onRequest({ region: "asia-southeast1" }, async (req, res) => {
     if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
     try {
