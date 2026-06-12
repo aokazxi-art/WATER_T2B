@@ -3,9 +3,19 @@ const admin = require("firebase-admin");
 
 admin.initializeApp();
 
-const POND_CONFIG = {
-  pond_1: { depth_cm: 200, area_cm2: 40000 }
+const db = admin.firestore();
+
+// ── Device map ────────────────────────────────────────────────────────────────
+// Replace placeholder values with real DevEUI strings from ChirpStack.
+// DevEUI format: lowercase hex, no colons (e.g. "a840411d5182b9e3")
+// Found in ChirpStack UI → Applications → [your app] → Devices → DevEUI column.
+const DEV_EUI_MAP = {
+  "0000000000000001": "pond_1",  // ← replace with real DevEUI
+  "0000000000000002": "pond_2",  // ← replace with real DevEUI
+  "0000000000000003": "pond_3",  // ← replace with real DevEUI
+  "0000000000000004": "pond_4",  // ← replace with real DevEUI
 };
+// ─────────────────────────────────────────────────────────────────────────────
 
 exports.chirpstackWebhook = functions
   .region("asia-east1")
@@ -15,40 +25,46 @@ exports.chirpstackWebhook = functions
     try {
       const payload = req.body;
 
-      if (!payload.object || payload.object.distance_cm === undefined) {
-        return res.status(200).send("Not an uplink, skipped");
+      // payload.object is the decoded sensor JSON from ChirpStack's JS decoder.
+      // payload.data is the raw base64 bytes — we never read that here.
+      if (!payload.object || payload.object.distance === undefined) {
+        console.log("Skipped: no decoded distance in payload.object");
+        return res.status(200).send("skipped");
       }
 
       const devEui = payload.deviceInfo?.devEui;
-      const pondId = devEuiToPondId(devEui);
-      const config = POND_CONFIG[pondId];
+      const pondId = DEV_EUI_MAP[devEui];
 
-      if (!config) {
-        console.warn("Unknown device:", devEui);
-        return res.status(200).send("Unknown device");
+      if (!pondId) {
+        console.warn(`Unknown devEui: ${devEui} — ignoring (returning 200 to stop retries)`);
+        return res.status(200).send("unknown device");
       }
 
-      const raw_cm      = payload.object.distance_cm;
-      const totalDist   = config.depth_cm + 30;
-      const waterHeight = totalDist - raw_cm;
-      const waterPct    = Math.round((waterHeight / config.depth_cm) * 100);
-      const volumeM3 = Math.round((config.area_cm2 * waterHeight) / 1_000_000 * 100) / 100;
+      // distance from EM500-UDL is in mm (channel 0x03, type 0x82, UInt16LE)
+      const raw_cm  = payload.object.distance / 10;
+      const battery = payload.object.battery ?? null;
+      const rssi    = payload.rxInfo?.[0]?.rssi ?? null;
+      const snr     = payload.rxInfo?.[0]?.snr  ?? null;
 
-      const db  = admin.database();
-      const ref = db.ref(`ponds/${pondId}/last_reading`);
+      // Use ChirpStack event time; fall back to now if absent
+      const timestamp = payload.time ? new Date(payload.time).getTime() : Date.now();
 
-      await ref.set({
-        raw_cm,
-        water_height_cm : waterHeight,
-        water_pct       : waterPct,
-        volume_m3       : volumeM3,
-        battery         : payload.object.battery ?? null,
-        rssi            : payload.rxInfo?.[0]?.rssi ?? null,
-        snr             : payload.rxInfo?.[0]?.snr  ?? null,
-        timestamp       : Date.now()
-      });
+      const docRef = db.collection("ponds").doc(`pond_${pondId}`);
+      await docRef.set(
+        {
+          last_reading: {
+            raw_cm,
+            battery,
+            rssi,
+            snr,
+            timestamp,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true }
+      );
 
-      console.log(`pond=${pondId} raw=${raw_cm} pct=${waterPct}%`);
+      console.log(`pond=${pondId} raw_cm=${raw_cm} battery=${battery}% ts=${timestamp}`);
       return res.status(200).send("OK");
 
     } catch (err) {
@@ -56,10 +72,3 @@ exports.chirpstackWebhook = functions
       return res.status(500).send("Internal error");
     }
   });
-
-function devEuiToPondId(devEui) {
-  const map = {
-    "0102030405060708": "pond_1",
-  };
-  return map[devEui] ?? null;
-}
