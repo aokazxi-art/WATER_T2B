@@ -49,7 +49,7 @@ exports.chirpstackWebhook = onRequest({ region: "asia-southeast1" }, async (req,
       // Use ChirpStack event time; fall back to now if absent
       const timestamp = payload.time ? new Date(payload.time).getTime() : Date.now();
 
-      const docRef = db.collection("ponds").doc(`pond_${pondId}`);
+      const docRef = db.collection("ponds").doc(pondId);
       await docRef.set(
         {
           last_reading: {
