@@ -10,10 +10,12 @@ const db = admin.firestore();
 // DevEUI format: lowercase hex, no colons (e.g. "a840411d5182b9e3")
 // Found in ChirpStack UI → Applications → [your app] → Devices → DevEUI column.
 const DEV_EUI_MAP = {
-  "0000000000000001": "pond_1",  // ← replace with real DevEUI
-  "0000000000000002": "pond_2",  // ← replace with real DevEUI
-  "0000000000000003": "pond_3",  // ← replace with real DevEUI
-  "0000000000000004": "pond_4",  // ← replace with real DevEUI
+  // Simulator DevEUIs — swap for real hardware DevEUIs when sensors arrive.
+  // Real DevEUIs: ChirpStack UI → Applications → [app] → Devices → DevEUI column.
+  "aabb000000000001": "pond_1",
+  "aabb000000000002": "pond_2",
+  "aabb000000000003": "pond_3",
+  "aabb000000000004": "pond_4",
 };
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -1,40 +1,33 @@
 // ============================================================
 //  simulator/chirpstack.mjs
-//  จำลองการส่งข้อมูล sensor ผ่าน MQTT → ChirpStack gateway
-//  รัน: node simulator/chirpstack.mjs
+//  Simulates 4 EM500-UDL sensors via MQTT → ChirpStack gateway
+//  Run: node simulator/chirpstack.mjs
 // ============================================================
 
 import mqtt from "mqtt";
-import { GATEWAY_ID, RF } from "./config.mjs";
+import { GATEWAY_ID, RF, DEVICES } from "./config.mjs";
 import { buildLoRaWANFrame } from "./lorawan.mjs";
 
-// ────────────────────────────────────────────────────────────
-//  ค่าข้อมูล sensor ที่จะส่ง — แก้ตรงนี้เพื่อทดสอบ
-// ────────────────────────────────────────────────────────────
+const INTERVAL_MS = 10000;          // send all 4 devices every 10 s
+const MQTT_BROKER = "mqtt://localhost:1883";
+const FPORT       = 1;
 
-const SENSOR = {
-  distance_cm: 120, // ระยะวัดน้ำ (หน่วย cm)
-  battery_pct: 82,  // แบตเตอรี่ (%)
-};
-
-const INTERVAL_MS  = 5000; // ส่งทุก 5 วินาที
-const MQTT_BROKER  = "mqtt://localhost:1883";
-const FPORT        = 1;    // FPort 1 = application data
-
-// ────────────────────────────────────────────────────────────
-//  สร้าง payload และ publish ไปยัง ChirpStack
-// ────────────────────────────────────────────────────────────
-
-/** สร้าง payload 3 bytes: [distance_cm (2B BE), battery% (1B)] */
-function buildPayload(distanceCm, batteryPct) {
-  const buf = Buffer.alloc(3);
-  buf.writeUInt16BE(distanceCm, 0);
-  buf.writeUInt8(batteryPct, 2);
+// ── Milesight EM500-UDL TLV payload ──────────────────────────────────────────
+// Battery : channel=0x01, type=0x75, 1 byte uint8  (unit: %)
+// Distance: channel=0x03, type=0x82, 2 bytes uint16LE (unit: mm)
+//
+// Example — distance=2450mm, battery=85%:
+//   01 75 55   03 82 92 09
+// ─────────────────────────────────────────────────────────────────────────────
+function buildTLVPayload(distanceMm, batteryPct) {
+  const buf = Buffer.alloc(7);
+  buf[0] = 0x01; buf[1] = 0x75; buf[2] = batteryPct & 0xff;
+  buf[3] = 0x03; buf[4] = 0x82;
+  buf.writeUInt16LE(distanceMm, 5);
   return buf;
 }
 
-/** สร้าง ChirpStack gateway uplink event message */
-function buildChirpStackMessage(phyFrame) {
+function buildGatewayMessage(phyFrame) {
   return {
     phyPayload: phyFrame.toString("base64"),
     txInfo: {
@@ -49,33 +42,45 @@ function buildChirpStackMessage(phyFrame) {
     },
     rxInfo: {
       gatewayId: GATEWAY_ID,
-      rssi:      -85,           // จำลอง: สัญญาณ dBm
-      snr:        7.5,          // จำลอง: Signal-to-Noise ratio
+      rssi:      -85,
+      snr:        7.5,
       context:   "AAAAAAAAAA==",
     },
   };
 }
 
-// ────────────────────────────────────────────────────────────
-//  MQTT — เชื่อมต่อและส่งข้อมูลซ้ำตาม INTERVAL_MS
-// ────────────────────────────────────────────────────────────
+// ── MQTT ──────────────────────────────────────────────────────────────────────
 
 const client = mqtt.connect(MQTT_BROKER);
-let fcnt = 0; // Frame Counter เริ่มต้นที่ 0
+const fcnts  = new Array(DEVICES.length).fill(0);  // per-device frame counter
+const topic  = `as923/gateway/${GATEWAY_ID}/event/up`;
 
 client.on("connect", () => {
-  console.log(`✅ Connected to ${MQTT_BROKER}`);
+  console.log(`Connected to ${MQTT_BROKER}`);
+  console.log(`Sending ${DEVICES.length} devices every ${INTERVAL_MS / 1000}s`);
+  console.log(`Topic: ${topic}`);
+  console.log("-".repeat(70));
 
-  setInterval(() => {
-    const plain    = buildPayload(SENSOR.distance_cm, SENSOR.battery_pct);
-    const phyFrame = buildLoRaWANFrame(fcnt, FPORT, plain);
-    const message  = buildChirpStackMessage(phyFrame);
-    const topic    = `as923/gateway/${GATEWAY_ID}/event/up`;
+  function tick() {
+    DEVICES.forEach((device, i) => {
+      const tlv      = buildTLVPayload(device.distanceMm, device.battery);
+      const phyFrame = buildLoRaWANFrame(fcnts[i], FPORT, tlv, device);
+      const message  = buildGatewayMessage(phyFrame);
 
-    client.publish(topic, JSON.stringify(message));
-    console.log(`📡 fcnt=${fcnt}  distance_cm=${SENSOR.distance_cm}  battery=${SENSOR.battery_pct}%`);
-    fcnt++;
-  }, INTERVAL_MS);
+      client.publish(topic, JSON.stringify(message));
+      console.log(
+        `[pond_${i + 1}]  devEui=${device.devEui}` +
+        `  dist=${device.distanceMm}mm (${device.distanceMm / 10}cm)` +
+        `  bat=${device.battery}%  fcnt=${fcnts[i]}` +
+        `  payload=${tlv.toString("hex")}`
+      );
+      fcnts[i]++;
+    });
+    console.log("-".repeat(70));
+  }
+
+  tick();  // send immediately on connect, then repeat
+  setInterval(tick, INTERVAL_MS);
 });
 
-client.on("error", (err) => console.error("❌ MQTT error:", err));
+client.on("error", (err) => console.error("MQTT error:", err));
