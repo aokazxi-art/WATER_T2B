@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const { onRequest } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -19,9 +19,7 @@ const DEV_EUI_MAP = {
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-exports.chirpstackWebhook = functions
-  .region("asia-east1")
-  .https.onRequest(async (req, res) => {
+exports.chirpstackWebhook = onRequest({ region: "asia-southeast3" }, async (req, res) => {
     if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
 
     try {
