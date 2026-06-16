@@ -1,0 +1,34 @@
+[[regions]]
+  name        = "as923"
+  common_name = "AS923"
+
+  [regions.gateway]
+    force_gws_private = false
+
+  [regions.network]
+    installation_margin      = 10
+    rx_window                = 0
+    rx1_delay                = 1
+    rx1_dr_offset            = 0
+    rx2_dr                   = 2
+    rx2_frequency            = 923200000
+    gateway_prefer_min_margin = 10
+    downlink_tx_power        = -1
+    adr_disabled             = false
+    min_dr                   = 0
+    max_dr                   = 5
+    uplink_dwell_time_400ms   = false
+    downlink_dwell_time_400ms = false
+
+  # Default AS923 channel plan (923.2 / 923.4 MHz)
+  [[regions.channels]]
+    frequency = 923200000
+    min_dr    = 0
+    max_dr    = 5
+    enabled   = true
+
+  [[regions.channels]]
+    frequency = 923400000
+    min_dr    = 0
+    max_dr    = 5
+    enabled   = true

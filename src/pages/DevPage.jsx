@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ref, set as fbSet } from 'firebase/database';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
 function dayStr(date) {
@@ -44,6 +45,8 @@ export default function DevPage({ ponds, onBack }) {
   const [targetDate,    setTargetDate]    = useState(yesterday);
   const [status,        setStatus]        = useState(null); // null | 'running' | 'done' | 'error'
   const [log,           setLog]           = useState([]);
+  const [exportStatus,  setExportStatus]  = useState(null);
+  const [exportLog,     setExportLog]     = useState([]);
 
   function togglePond(id) {
     setSelectedPonds(prev => {
@@ -85,6 +88,61 @@ export default function DevPage({ ponds, onBack }) {
       msgs.push(`✗ Error: ${err.message}`);
       setLog([...msgs]);
       setStatus('error');
+    }
+  }
+
+  async function handleExport() {
+    if (exportStatus === 'running' || selectedPonds.size === 0) return;
+    setExportStatus('running');
+    setExportLog([]);
+    const msgs = [];
+
+    try {
+      const pad = n => String(n).padStart(2, '0');
+      const rows = ['datetime,pond,raw_cm,water_pct,battery'];
+
+      for (const pond of ponds) {
+        if (!selectedPonds.has(pond.id)) continue;
+
+        const q    = query(
+          collection(db, 'history', `pond_${pond.id}`, 'readings'),
+          where('date', '==', targetDate),
+        );
+        const snap     = await getDocs(q);
+        const readings = snap.docs.map(d => d.data()).sort((a, b) => a.timestamp - b.timestamp);
+
+        for (const r of readings) {
+          const dt    = new Date(r.timestamp);
+          const dtStr = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}:${pad(dt.getSeconds())}`;
+          rows.push(`${dtStr},${pond.name},${r.raw_cm ?? ''},${r.pct ?? ''},${r.battery ?? ''}`);
+        }
+
+        msgs.push(`✓ ${pond.name} — ${readings.length} rows`);
+        setExportLog([...msgs]);
+      }
+
+      if (rows.length === 1) {
+        msgs.push('ไม่พบข้อมูลในวันที่นี้');
+        setExportLog([...msgs]);
+        setExportStatus('error');
+        return;
+      }
+
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `water_data_${targetDate}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      msgs.push(`รวม ${rows.length - 1} แถว — บันทึกแล้ว water_data_${targetDate}.csv`);
+      setExportLog([...msgs]);
+      setExportStatus('done');
+    } catch (err) {
+      msgs.push(`✗ Error: ${err.message}`);
+      setExportLog([...msgs]);
+      setExportStatus('error');
     }
   }
 
@@ -213,6 +271,48 @@ export default function DevPage({ ponds, onBack }) {
           )}
 
         </div>
+
+        {/* ── Export CSV ────────────────────────────────────────── */}
+        <div style={{
+          background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0', padding: 20,
+          display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16,
+        }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', marginBottom: 2 }}>
+              Export CSV
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>
+              ดาวน์โหลดข้อมูล sensor จาก Firestore เป็นไฟล์ CSV ตามวันที่และบ่อที่เลือก
+            </div>
+          </div>
+
+          <button
+            onClick={handleExport}
+            disabled={exportStatus === 'running' || selectedPonds.size === 0}
+            style={{
+              padding: '9px 0', borderRadius: 7,
+              background: (exportStatus === 'running' || selectedPonds.size === 0) ? '#a3e635' : '#65a30d',
+              color: '#fff', border: 'none', fontWeight: 600, fontSize: 13,
+              cursor: (exportStatus === 'running' || selectedPonds.size === 0) ? 'not-allowed' : 'pointer',
+              transition: 'background .15s',
+            }}
+          >
+            {exportStatus === 'running' ? 'กำลังโหลด...' : 'Export CSV'}
+          </button>
+
+          {exportLog.length > 0 && (
+            <div style={{
+              padding: '10px 12px',
+              background: exportStatus === 'error' ? '#fef2f2' : '#f0fdf4',
+              border: `1px solid ${exportStatus === 'error' ? '#fecaca' : '#bbf7d0'}`,
+              borderRadius: 6, fontSize: 12, color: '#374151',
+              display: 'flex', flexDirection: 'column', gap: 3,
+            }}>
+              {exportLog.map((m, i) => <span key={i}>{m}</span>)}
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );

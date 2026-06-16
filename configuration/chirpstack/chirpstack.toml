@@ -1,0 +1,43 @@
+[logging]
+  level = "info"
+
+[postgresql]
+  dsn = "postgres://chirpstack:chirpstack@postgresql/chirpstack?sslmode=disable"
+  max_open_connections = 10
+  min_idle_connections = 0
+
+[redis]
+  servers = ["redis:6379"]
+  tls_enabled = false
+  cluster = false
+
+[network]
+  net_id = "000000"
+  enabled_regions = [
+    "as923",
+  ]
+
+[api]
+  bind = "0.0.0.0:8080"
+  secret = "you-must-replace-this"
+
+# Gateway backend: receives events from chirpstack-gateway-bridge via MQTT
+[gateway]
+  backend = "mqtt"
+
+  [gateway.backend.mqtt]
+    event_topic          = "as923/gateway/+/event/+"
+    state_topic          = "as923/gateway/+/state/+"
+    command_topic_template = "as923/gateway/{{ .GatewayID }}/command/{{ .CommandType }}"
+    server               = "tcp://mosquitto:1883"
+    json                 = false
+
+# Application MQTT integration (for bridge.mjs to consume uplinks)
+[integration]
+  enabled = ["mqtt"]
+
+  [integration.mqtt]
+    server = "tcp://mosquitto:1883"
+    json   = true
+    event_topic_template   = "application/{{ .ApplicationID }}/device/{{ .DevEUI }}/event/{{ .EventType }}"
+    command_topic_template = "application/{{ .ApplicationID }}/device/{{ .DevEUI }}/command/{{ .CommandType }}"

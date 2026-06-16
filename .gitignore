@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 VITE_FIREBASE*
 .env.local
+
+.vercel
