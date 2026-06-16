@@ -49,22 +49,24 @@ exports.chirpstackWebhook = onRequest({ region: "asia-southeast1" }, async (req,
       // Use ChirpStack event time; fall back to now if absent
       const timestamp = payload.time ? new Date(payload.time).getTime() : Date.now();
 
-      const docRef = db.collection("ponds").doc(pondId);
-      await docRef.set(
-        {
-          last_reading: {
-            raw_cm,
-            battery,
-            rssi,
-            snr,
-            timestamp,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-        },
-        { merge: true }
-      );
+      const d = new Date(timestamp);
+      const date = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 
-      console.log(`pond=${pondId} raw_cm=${raw_cm} battery=${battery}% ts=${timestamp}`);
+      const reading = { raw_cm, battery, rssi, snr, timestamp };
+
+      await Promise.all([
+        // last_reading สำหรับหน้า live dashboard
+        db.collection("ponds").doc(pondId).set(
+          { last_reading: { ...reading, updatedAt: admin.firestore.FieldValue.serverTimestamp() } },
+          { merge: true }
+        ),
+        // history สำหรับ CSV export และกราฟรายวัน
+        db.collection("history").doc(pondId).collection("readings").add(
+          { ...reading, date }
+        ),
+      ]);
+
+      console.log(`pond=${pondId} raw_cm=${raw_cm} battery=${battery}% date=${date}`);
       return res.status(200).send("OK");
 
     } catch (err) {
