@@ -96,7 +96,32 @@ export function loadDailyHistory(pondId, date) {
 
 export async function loadDailyHistoryAsync(pondId, date) {
   const dateKey = dayStr(date);
-  const lsKey = `water_daily_${pondId}_${dateKey}`;
+  const lsKey   = `water_daily_${pondId}_${dateKey}`;
+  const isToday = dateKey === dayStr(new Date());
+
+  // Past dates: return the cache immediately if non-empty
+  if (!isToday) {
+    try {
+      const cached = localStorage.getItem(lsKey);
+      if (cached) {
+        const arr = JSON.parse(cached);
+        if (arr.length > 0) return arr;
+      }
+    } catch (_) {}
+  }
+
+  // Today (always) or past with empty cache: fetch from Firestore
+  try {
+    const q    = query(collection(db, 'history', `pond_${pondId}`, 'readings'), where('date', '==', dateKey));
+    const snap = await getDocs(q);
+    const arr  = snap.docs.map(d => d.data()).sort((a, b) => a.time - b.time);
+    if (arr.length > 0) {
+      try { localStorage.setItem(lsKey, JSON.stringify(arr)); } catch (_) {}
+      return arr;
+    }
+  } catch (_) {}
+
+  // Firestore failed or returned empty → fall back to cache
   try {
     const cached = localStorage.getItem(lsKey);
     if (cached) {
@@ -104,19 +129,49 @@ export async function loadDailyHistoryAsync(pondId, date) {
       if (arr.length > 0) return arr;
     }
   } catch (_) {}
+  return [];
+}
+
+export async function loadMonthDaysWithData(pondId, year, month) {
   try {
-    const q = query(
+    const mm       = String(month + 1).padStart(2, '0');
+    const startStr = `${year}-${mm}-01`;
+    const endStr   = `${year}-${mm}-31`;
+    const q    = query(
       collection(db, 'history', `pond_${pondId}`, 'readings'),
-      where('date', '==', dateKey)
+      where('date', '>=', startStr),
+      where('date', '<=', endStr),
     );
     const snap = await getDocs(q);
-    const arr  = snap.docs.map(d => d.data()).sort((a, b) => a.time - b.time);
-    if (arr.length > 0) {
+    const days = new Set();
+    snap.docs.forEach(d => {
+      const dateStr = d.data().date;
+      if (dateStr) {
+        const day = parseInt(dateStr.split('-')[2], 10);
+        if (!isNaN(day)) days.add(day);
+      }
+    });
+    return days;
+  } catch (_) {
+    return new Set();
+  }
+}
+
+export function subscribeDailyHistory(pondId, date, onData) {
+  const dateKey = dayStr(date);
+  const lsKey   = `water_daily_${pondId}_${dateKey}`;
+  try {
+    const q     = query(collection(db, 'history', `pond_${pondId}`, 'readings'), where('date', '==', dateKey));
+    const unsub = onSnapshot(q, snapshot => {
+      const arr = snapshot.docs.map(d => d.data()).sort((a, b) => a.time - b.time);
       try { localStorage.setItem(lsKey, JSON.stringify(arr)); } catch (_) {}
-    }
-    return arr;
-  } catch (_) {}
-  return [];
+      onData(arr);
+    });
+    return unsub;
+  } catch (_) {
+    loadDailyHistoryAsync(pondId, date).then(arr => onData(arr)).catch(() => {});
+    return () => {};
+  }
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
@@ -204,12 +259,14 @@ export function usePondData() {
 
           const wh    = calcWaterHeight(dist, p.depth, p.sensorOffset);
           const pct   = calcWaterPercent(wh, p.depth);
+          const vol   = calcVolumeM3(p.area, Math.max(0, wh));
           const entry = {
             pct,
             time:    receivedAt,
             battery: reading.battery ?? null,
             dist:    +dist.toFixed(1),
             wh:      +Math.max(0, wh).toFixed(2),
+            volume:  +vol.toFixed(1),
           };
           appendDailyHistory(p.id, entry);
           setHistories(prev => {

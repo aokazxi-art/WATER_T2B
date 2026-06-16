@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { loadDailyHistory } from '../hooks/usePondData';
+import { loadDailyHistoryAsync, subscribeDailyHistory, loadMonthDaysWithData } from '../hooks/usePondData';
+import { exportDailyCsv } from '../utils/exportCsv';
 
 const DAYS_TH = ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'];
 const MONTHS_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
@@ -27,7 +28,7 @@ function getDaysWithData(pondId, year, month) {
 }
 
 function buildCalendar(year, month) {
-  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const firstDay = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells = [];
   for (let i = 0; i < firstDay; i++) cells.push(null);
@@ -35,21 +36,47 @@ function buildCalendar(year, month) {
   return cells;
 }
 
-export default function DailyChart({ pondId, pondName, color, onClose }) {
+export default function DailyChart({ pondId, pondName, color, onClose, area }) {
   const today = new Date();
-  const [viewYear, setViewYear]   = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [selectedDate, setSelectedDate] = useState(today);
-  const [dayData, setDayData] = useState([]);
+  const [viewYear,      setViewYear]      = useState(today.getFullYear());
+  const [viewMonth,     setViewMonth]     = useState(today.getMonth());
+  const [selectedDate,  setSelectedDate]  = useState(today);
+  const [dayData,       setDayData]       = useState([]);
+  const [isLoading,     setIsLoading]     = useState(true);
+  const [firestoreDays, setFirestoreDays] = useState(() => new Set());
 
-  const daysWithData = useMemo(
-    () => getDaysWithData(pondId, viewYear, viewMonth),
-    [pondId, viewYear, viewMonth, dayData] // re-check เมื่อ dayData เปลี่ยน
-  );
-
+  // ── Data loading: live subscription for today, one-shot async for past ──────
   useEffect(() => {
-    setDayData(loadDailyHistory(pondId, selectedDate));
+    let cancelled = false;
+    setIsLoading(true);
+    setDayData([]);
+
+    const isToday = selectedDate.toDateString() === new Date().toDateString();
+
+    if (isToday) {
+      const unsub = subscribeDailyHistory(pondId, selectedDate, arr => {
+        if (!cancelled) { setDayData(arr); setIsLoading(false); }
+      });
+      return () => { cancelled = true; unsub(); };
+    } else {
+      loadDailyHistoryAsync(pondId, selectedDate).then(arr => {
+        if (!cancelled) { setDayData(arr); setIsLoading(false); }
+      });
+      return () => { cancelled = true; };
+    }
   }, [pondId, selectedDate]);
+
+  // ── Calendar dots: merge Firestore-backed set with localStorage ──────────────
+  useEffect(() => {
+    loadMonthDaysWithData(pondId, viewYear, viewMonth).then(set => {
+      setFirestoreDays(set);
+    });
+  }, [pondId, viewYear, viewMonth]);
+
+  const daysWithData = useMemo(() => {
+    const ls = getDaysWithData(pondId, viewYear, viewMonth);
+    return new Set([...ls, ...firestoreDays]);
+  }, [pondId, viewYear, viewMonth, dayData, firestoreDays]);
 
   function prevMonth() {
     if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
@@ -78,10 +105,11 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
   const min = dayData.length ? Math.min(...dayData.map(x => x.pct)).toFixed(1) : null;
   const max = dayData.length ? Math.max(...dayData.map(x => x.pct)).toFixed(1) : null;
 
-  const selDay   = selectedDate.getDate();
-  const selMonth = selectedDate.getMonth();
-  const selYear  = selectedDate.getFullYear();
-  const selLabel = `${selDay} ${MONTHS_TH[selMonth]} ${selYear + 543}`;
+  const selDay    = selectedDate.getDate();
+  const selMonth  = selectedDate.getMonth();
+  const selYear   = selectedDate.getFullYear();
+  const selLabel  = `${selDay} ${MONTHS_TH[selMonth]} ${selYear + 543}`;
+  const dateLabel = `${selYear}-${String(selMonth + 1).padStart(2, '0')}-${String(selDay).padStart(2, '0')}`;
 
   return (
     <div
@@ -92,6 +120,7 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
       }}
       onClick={onClose}
     >
+      <style>{`@keyframes dc-blink{0%,100%{opacity:.25}50%{opacity:1}}`}</style>
       <div
         style={{
           background: '#fff', borderRadius: 20,
@@ -115,14 +144,36 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
               {selLabel} · {dayData.length} readings
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              marginLeft: 'auto', background: '#f1f5f9', border: 'none',
-              borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
-              fontSize: 15, color: '#64748b',
-            }}
-          >✕</button>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              disabled={dayData.length === 0}
+              onClick={() => exportDailyCsv(pondName, dateLabel, dayData, area)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '5px 12px', borderRadius: 8, fontSize: 12, fontWeight: 700,
+                cursor: dayData.length === 0 ? 'default' : 'pointer',
+                background: dayData.length === 0 ? '#f8fafc' : '#f0fdf4',
+                border: `1.5px solid ${dayData.length === 0 ? '#e2e8f0' : '#86efac'}`,
+                color: dayData.length === 0 ? '#cbd5e1' : '#16a34a',
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export CSV
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                background: '#f1f5f9', border: 'none',
+                borderRadius: 8, width: 32, height: 32, cursor: 'pointer',
+                fontSize: 15, color: '#64748b',
+              }}
+            >✕</button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap' }}>
@@ -159,15 +210,15 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
               {cells.map((day, i) => {
                 if (!day) return <div key={`e${i}`} />;
 
-                const cellDate  = new Date(viewYear, viewMonth, day);
-                const isFuture  = cellDate > today;
-                const isToday_  = cellDate.toDateString() === today.toDateString();
+                const cellDate   = new Date(viewYear, viewMonth, day);
+                const isFuture   = cellDate > today;
+                const isToday_   = cellDate.toDateString() === today.toDateString();
                 const isSelected = (
                   day === selDay &&
                   viewMonth === selMonth &&
                   viewYear === selYear
                 );
-                const hasData   = daysWithData.has(day);
+                const hasData = daysWithData.has(day);
 
                 return (
                   <div
@@ -191,7 +242,6 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
                     }}
                   >
                     {day}
-                    {/* จุดแสดงว่ามีข้อมูล */}
                     {hasData && !isSelected && (
                       <div style={{
                         position: 'absolute', bottom: 2, left: '50%',
@@ -220,8 +270,6 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
 
           {/* ===== กราฟ + สถิติ ===== */}
           <div style={{ flex: 1, padding: '16px 20px', minWidth: 0 }}>
-
-            {/* Stats */}
             {dayData.length > 0 ? (
               <>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
@@ -282,6 +330,23 @@ export default function DailyChart({ pondId, pondName, color, onClose }) {
                   </AreaChart>
                 </ResponsiveContainer>
               </>
+            ) : isLoading ? (
+              <div style={{
+                height: 260, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                color: '#94a3b8', fontSize: 13,
+                background: '#f8fafc', borderRadius: 12,
+              }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+                  {[0, 0.15, 0.3].map(d => (
+                    <div key={d} style={{
+                      width: 8, height: 8, borderRadius: '50%', background: color,
+                      animation: `dc-blink 1.2s ${d}s ease-in-out infinite`,
+                    }} />
+                  ))}
+                </div>
+                กำลังโหลด...
+              </div>
             ) : (
               <div style={{
                 height: 260, display: 'flex', flexDirection: 'column',
