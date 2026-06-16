@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   collection, doc, onSnapshot, getDocs,
-  setDoc, updateDoc, deleteDoc, addDoc,
+  setDoc, deleteDoc, addDoc,
   query, where, writeBatch,
 } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -223,30 +223,28 @@ export function usePondData() {
     const unsub = onSnapshot(collection(db, REGISTRY), snapshot => {
       setIsConnected(true);
 
-      // Only seed Firestore from localStorage when the SERVER confirms the
-      // collection is empty — not when we're reading an empty offline cache.
-      // Without this guard, an offline-first snapshot could let stale
-      // localStorage overwrite remote data once writes succeed.
-      if (
-        snapshot.empty &&
-        !initialized &&
-        !snapshot.metadata.fromCache
-      ) {
-        initialized = true;
-        loadPonds().forEach(p => {
-          setDoc(doc(db, REGISTRY, String(p.id)), p)
-            .catch(err => console.error('[pond_registry write failed]', { op: 'seed', id: p.id, err }));
-        });
-        return;
-      }
-      initialized = true;
-
       // Build pond list from Firestore. Firestore fields override DEFAULT_FIELDS
       // (per-doc base) and DEFAULT_PONDS (per-id base inside mergeWithDefaults),
       // so a remote edit wins for every field it contains.
       const fbPonds = snapshot.docs
         .map(d => ({ ...DEFAULT_FIELDS, ...d.data() }))
         .filter(p => p.id != null);
+
+      // Backfill any DEFAULT_PONDS that are missing from Firestore. We do this
+      // once per session, and only after the SERVER has confirmed the snapshot
+      // (not an offline-cache snapshot), so stale localStorage can't overwrite
+      // fresh remote data. Backfilling per-id (instead of only when the whole
+      // collection is empty) means a doc deleted by a write failure or never
+      // created can self-heal on first connect.
+      if (!initialized && !snapshot.metadata.fromCache) {
+        initialized = true;
+        const presentIds = new Set(fbPonds.map(p => p.id));
+        DEFAULT_PONDS.forEach(p => {
+          if (presentIds.has(p.id)) return;
+          setDoc(doc(db, REGISTRY, String(p.id)), p)
+            .catch(err => console.error('[pond_registry write failed]', { op: 'seed', id: p.id, err }));
+        });
+      }
 
       setPonds(mergeWithDefaults(fbPonds));
     }, err => {
@@ -301,7 +299,10 @@ export function usePondData() {
 
   const updatePond = useCallback((id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p)); // optimistic
-    updateDoc(doc(db, REGISTRY, String(id)), updates)
+    // setDoc + merge upserts: if the pond_registry doc is missing (e.g. the
+    // initial seed never ran), this creates it instead of throwing
+    // "No document to update" and silently reverting the edit.
+    setDoc(doc(db, REGISTRY, String(id)), { id, ...updates }, { merge: true })
       .catch(err => console.error('[pond_registry write failed]', { op: 'update', id, updates, err }));
   }, []);
 
