@@ -101,9 +101,18 @@ export default function DailyChart({ pondId, pondName, color, onClose, area }) {
   const isNextDisabled = new Date(viewYear, viewMonth + 1, 1) > today;
 
   const chartData = dayData.map(item => ({ time: item.time, v: item.pct }));
-  const avg = dayData.length ? (dayData.reduce((s, x) => s + x.pct, 0) / dayData.length).toFixed(1) : null;
-  const min = dayData.length ? Math.min(...dayData.map(x => x.pct)).toFixed(1) : null;
-  const max = dayData.length ? Math.max(...dayData.map(x => x.pct)).toFixed(1) : null;
+  let avg = null, min = null, max = null;
+  if (dayData.length) {
+    let sum = 0, mn = Infinity, mx = -Infinity;
+    for (const x of dayData) {
+      sum += x.pct;
+      if (x.pct < mn) mn = x.pct;
+      if (x.pct > mx) mx = x.pct;
+    }
+    avg = (sum / dayData.length).toFixed(1);
+    min = mn.toFixed(1);
+    max = mx.toFixed(1);
+  }
 
   const selDay    = selectedDate.getDate();
   const selMonth  = selectedDate.getMonth();

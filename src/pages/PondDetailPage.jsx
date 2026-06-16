@@ -98,9 +98,13 @@ function computeStats(enriched, pond) {
   const pcts = enriched.map(x => x.pct);
   const n = pcts.length;
   const avg = pcts.reduce((s,v) => s+v, 0) / n;
-  const min = Math.min(...pcts), max = Math.max(...pcts);
+  let min = Infinity, max = -Infinity, minIdx = -1, maxIdx = -1;
+  for (let i = 0; i < pcts.length; i++) {
+    const v = pcts[i];
+    if (v < min) { min = v; minIdx = i; }
+    if (v > max) { max = v; maxIdx = i; }
+  }
   const sd  = Math.sqrt(pcts.reduce((s,v) => s+(v-avg)**2, 0) / n);
-  const minIdx = pcts.indexOf(min), maxIdx = pcts.indexOf(max);
 
   // Time-in-status (trapezoid)
   let tN=0, tW=0, tD=0;
@@ -175,11 +179,13 @@ function buildHourlyAgg(enriched, pond) {
   }
   return [...map.values()].sort((a,b)=>b.ts-a.ts).map(b => {
     const avg = b.pcts.reduce((s,v)=>s+v,0)/b.pcts.length;
+    let mn = Infinity, mx = -Infinity;
+    for (const v of b.pcts) { if (v < mn) mn = v; if (v > mx) mx = v; }
     return {
       ts: b.ts,
       avg: +avg.toFixed(1),
-      min: +Math.min(...b.pcts).toFixed(1),
-      max: +Math.max(...b.pcts).toFixed(1),
+      min: +mn.toFixed(1),
+      max: +mx.toFixed(1),
       count: b.pcts.length,
       trend: +(b.last - b.first).toFixed(1),
       status: getStatus(avg, pond.thresholdYellow, pond.thresholdRed),
@@ -197,11 +203,13 @@ function buildDailyAgg(enriched, pond) {
   }
   return [...map.values()].sort((a,b)=>b.ts-a.ts).map(b => {
     const avg = b.pcts.reduce((s,v)=>s+v,0)/b.pcts.length;
+    let mn = Infinity, mx = -Infinity;
+    for (const v of b.pcts) { if (v < mn) mn = v; if (v > mx) mx = v; }
     return {
       ts: b.ts,
       avg: +avg.toFixed(1),
-      min: +Math.min(...b.pcts).toFixed(1),
-      max: +Math.max(...b.pcts).toFixed(1),
+      min: +mn.toFixed(1),
+      max: +mx.toFixed(1),
       count: b.pcts.length,
       trend: +(b.last - b.first).toFixed(1),
       status: getStatus(avg, pond.thresholdYellow, pond.thresholdRed),
