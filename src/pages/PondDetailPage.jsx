@@ -6,7 +6,7 @@ import {
 import TankGauge   from '../components/TankGauge';
 import StatusBadge from '../components/StatusBadge';
 import { getStatusColor, getStatus, calcVolumeM3 } from '../utils/waterLevel';
-import { loadDailyHistoryAsync } from '../hooks/usePondData';
+import { loadDailyHistoryAsync, subscribeDailyHistory } from '../hooks/usePondData';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.',
@@ -396,10 +396,45 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
     if (!state?.pond || !start || !end) return;
     let cancelled = false;
     setLoading(true); setPage(0);
-    loadRange(state.pond.id, start, end).then(d => {
-      if (!cancelled) { setData(d); setLoading(false); }
-    });
-    return () => { cancelled = true; };
+
+    const pondId        = state.pond.id;
+    const today         = new Date();
+    const todayStr      = dateToStr(today);
+    const includesToday = end >= todayStr;
+    const pastEnd       = includesToday ? dateToStr(daysAgo(1)) : end;
+    const hasPast       = start <= pastEnd;
+
+    let pastData   = [];
+    let todayData  = [];
+    let pastReady  = !hasPast;
+    let todayReady = !includesToday;
+
+    const merge = () => {
+      if (cancelled || !pastReady || !todayReady) return;
+      setData([...pastData, ...todayData].sort((a, b) => a.time - b.time));
+      setLoading(false);
+    };
+
+    if (hasPast) {
+      loadRange(pondId, start, pastEnd).then(d => {
+        if (cancelled) return;
+        pastData  = d;
+        pastReady = true;
+        merge();
+      });
+    }
+
+    let unsubToday = () => {};
+    if (includesToday) {
+      unsubToday = subscribeDailyHistory(pondId, today, arr => {
+        if (cancelled) return;
+        todayData  = arr;
+        todayReady = true;
+        merge();
+      });
+    }
+
+    return () => { cancelled = true; unsubToday(); };
   }, [state?.pond?.id, start, end]);
 
   if (!state) return null;
