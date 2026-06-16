@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Pond config — read only (app writes via Cloud Function / admin SDK)
+    match /pond_registry/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Live sensor readings — read only
+    match /ponds/{pondId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // History — read + write allowed (Import CSV, Cloud Function, browser hook)
+    match /history/{pondId}/readings/{readingId} {
+      allow read, write: if true;
+    }
+  }
+}
