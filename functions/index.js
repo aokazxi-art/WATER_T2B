@@ -52,11 +52,14 @@ exports.chirpstackWebhook = onRequest({ region: "asia-southeast1" }, async (req,
 
     // Read pond config to calculate derived water measurements
     const pondSnap = await db.collection("pond_registry").doc(pondId).get();
-    const { maxDepth = 0, area = 0 } = pondSnap.exists ? pondSnap.data() : {};
+    const { depth = 0, sensorOffset = 0, area = 0 } = pondSnap.exists ? pondSnap.data() : {};
 
     const distance_m    = raw_cm / 100;
-    const water_depth_m = (maxDepth / 100) - distance_m;
+    const water_depth_m = (depth / 100) - distance_m;
     const volume_m3     = Math.round(water_depth_m * area * 10) / 10;
+
+    const wh  = depth + sensorOffset - raw_cm;
+    const pct = Math.min(100, Math.max(0, (wh / depth) * 100));
 
     const reading = { raw_cm, battery, rssi, snr, timestamp };
 
@@ -66,21 +69,23 @@ exports.chirpstackWebhook = onRequest({ region: "asia-southeast1" }, async (req,
         { last_reading: { ...reading, updatedAt: FieldValue.serverTimestamp() } },
         { merge: true }
       ),
-      // history in Milesight CSV field format
+      // history — fields match what DailyChart and the live listener store
       db.collection("history").doc(pondId).collection("readings").add({
         time:          timestamp,
+        dist:          +raw_cm.toFixed(1),
+        wh:            +Math.max(0, wh).toFixed(2),
+        pct,
+        battery,
+        rssi,
+        snr,
         distance_m,
         water_depth_m,
         volume_m3,
-        battery,
-        raw_cm,
-        rssi,
-        snr,
         createdAt:     FieldValue.serverTimestamp(),
       }),
     ]);
 
-    console.log(`pond=${pondId} raw_cm=${raw_cm} distance_m=${distance_m} water_depth_m=${water_depth_m} volume_m3=${volume_m3} battery=${battery}%`);
+    console.log(`pond=${pondId} raw_cm=${raw_cm} pct=${pct.toFixed(1)} wh=${wh} distance_m=${distance_m} volume_m3=${volume_m3} battery=${battery}%`);
     return res.status(200).send("OK");
 
   } catch (err) {
