@@ -26,14 +26,14 @@ function generateRandomWalk(dateKey) {
   return entries;
 }
 
-// Parse "27/5/2026 15:25" → unix ms
+// Parse "2026-05-27 15:25:11" → unix ms (local time)
 function parseMilesightTime(str) {
   try {
-    const [datePart, timePart = '0:0'] = str.trim().split(' ');
-    const [d, m, y] = datePart.split('/').map(Number);
-    const [h, mn] = timePart.split(':').map(Number);
+    const [datePart, timePart = '00:00:00'] = str.trim().split(' ');
+    const [y, m, d] = datePart.split('-').map(Number);
+    const [h, mn, s] = timePart.split(':').map(Number);
     if (!y || !m || !d) return null;
-    return new Date(y, m - 1, d, h, mn, 0).getTime();
+    return new Date(y, m - 1, d, h, mn || 0, s || 0).getTime();
   } catch { return null; }
 }
 
