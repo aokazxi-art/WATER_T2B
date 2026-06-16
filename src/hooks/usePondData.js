@@ -164,7 +164,7 @@ export function subscribeDailyHistory(pondId, date, onData) {
     const q     = query(collection(db, 'history', `pond_${pondId}`, 'readings'), where('date', '==', dateKey));
     const unsub = onSnapshot(q, snapshot => {
       const arr = snapshot.docs.map(d => d.data()).sort((a, b) => a.time - b.time);
-      try { localStorage.setItem(lsKey, JSON.stringify(arr)); } catch (_) {}
+      try { localStorage.setItem(lsKey, JSON.stringify(arr.slice(-500))); } catch (_) {}
       onData(arr);
     });
     return unsub;

@@ -467,8 +467,21 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
   const hourlyAgg   = useMemo(() => buildHourlyAgg(enriched, pond),      [enriched, pond]);
   const dailyAgg    = useMemo(() => buildDailyAgg(enriched, pond),       [enriched, pond]);
 
-  // Chart data
-  const chartData  = enriched.map(x => ({ time: x.time, v: x.pct }));
+  // Chart data — downsample to keep Recharts responsive when readings are dense
+  const chartData = useMemo(() => {
+    const MAX_POINTS = 1000;
+    if (enriched.length <= MAX_POINTS) {
+      return enriched.map(x => ({ time: x.time, v: x.pct }));
+    }
+    const step = Math.ceil(enriched.length / MAX_POINTS);
+    const out  = [];
+    for (let i = 0; i < enriched.length; i += step) {
+      out.push({ time: enriched[i].time, v: enriched[i].pct });
+    }
+    const last = enriched[enriched.length - 1];
+    if (out[out.length - 1].time !== last.time) out.push({ time: last.time, v: last.pct });
+    return out;
+  }, [enriched]);
   const rangeHours = chartData.length >= 2
     ? (chartData[chartData.length-1].time - chartData[0].time) / 3_600_000 : 24;
   const ticks = buildTicks(chartData);
