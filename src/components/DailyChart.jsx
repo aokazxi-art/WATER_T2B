@@ -103,15 +103,19 @@ export default function DailyChart({ pondId, pondName, color, onClose, area }) {
   const chartData = dayData.map(item => ({ time: item.time, v: item.pct }));
   let avg = null, min = null, max = null;
   if (dayData.length) {
-    let sum = 0, mn = Infinity, mx = -Infinity;
+    let sum = 0, mn = Infinity, mx = -Infinity, count = 0;
     for (const x of dayData) {
+      if (!Number.isFinite(x.pct)) continue;
       sum += x.pct;
       if (x.pct < mn) mn = x.pct;
       if (x.pct > mx) mx = x.pct;
+      count++;
     }
-    avg = (sum / dayData.length).toFixed(1);
-    min = mn.toFixed(1);
-    max = mx.toFixed(1);
+    if (count > 0) {
+      avg = (sum / count).toFixed(1);
+      min = mn.toFixed(1);
+      max = mx.toFixed(1);
+    }
   }
 
   const selDay    = selectedDate.getDate();

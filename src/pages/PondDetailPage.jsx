@@ -20,6 +20,11 @@ const PRESETS = [
 const PAGE_SIZE = 50;
 const STATUS_TH = { normal:'ปกติ', warning:'เตือน', danger:'วิกฤต', loading:'—' };
 
+// Safe formatters: legacy / partial Firestore docs may be missing numeric fields,
+// so every .toFixed call goes through fmt() and every numeric input through num().
+const num = v => Number.isFinite(v) ? v : null;
+const fmt = (v, n) => Number.isFinite(v) ? v.toFixed(n) : '-';
+
 // ── Date helpers ──────────────────────────────────────────────────────────────
 function dateToStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -95,63 +100,89 @@ function fmtTick(ts, h) {
 // ── Analytics ─────────────────────────────────────────────────────────────────
 function computeStats(enriched, pond) {
   if (!enriched.length) return null;
-  const pcts = enriched.map(x => x.pct);
-  const n = pcts.length;
-  const avg = pcts.reduce((s,v) => s+v, 0) / n;
-  let min = Infinity, max = -Infinity, minIdx = -1, maxIdx = -1;
-  for (let i = 0; i < pcts.length; i++) {
-    const v = pcts[i];
-    if (v < min) { min = v; minIdx = i; }
-    if (v > max) { max = v; maxIdx = i; }
-  }
-  const sd  = Math.sqrt(pcts.reduce((s,v) => s+(v-avg)**2, 0) / n);
 
-  // Time-in-status (trapezoid)
+  // Single pass over enriched, skipping rows without a finite pct.
+  let sum = 0, count = 0;
+  let min = Infinity, max = -Infinity, minTime = null, maxTime = null;
+  let firstPct = null, lastPct = null, firstTime = null, lastTime = null;
+  for (const x of enriched) {
+    const v = x.pct;
+    if (!Number.isFinite(v)) continue;
+    sum += v;
+    if (v < min) { min = v; minTime = x.time; }
+    if (v > max) { max = v; maxTime = x.time; }
+    if (firstPct == null) { firstPct = v; firstTime = x.time; }
+    lastPct = v; lastTime = x.time;
+    count++;
+  }
+  if (!count) return null;
+  const avg = sum / count;
+
+  // Second pass for sd
+  let sumSq = 0;
+  for (const x of enriched) {
+    if (!Number.isFinite(x.pct)) continue;
+    sumSq += (x.pct - avg) ** 2;
+  }
+  const sd = Math.sqrt(sumSq / count);
+
+  // Time-in-status (trapezoid) — requires both endpoints finite
   let tN=0, tW=0, tD=0;
   for (let i=1; i<enriched.length; i++) {
-    const dt = enriched[i].time - enriched[i-1].time;
-    if (dt > 600_000) continue; // skip gaps > 10 min
-    const mid = (enriched[i].pct + enriched[i-1].pct) / 2;
+    const a = enriched[i-1], b = enriched[i];
+    if (!Number.isFinite(a.pct) || !Number.isFinite(b.pct)) continue;
+    if (!Number.isFinite(a.time) || !Number.isFinite(b.time)) continue;
+    const dt = b.time - a.time;
+    if (dt <= 0 || dt > 600_000) continue;
+    const mid = (a.pct + b.pct) / 2;
     const st = getStatus(mid, pond.thresholdYellow, pond.thresholdRed);
     if (st==='normal') tN+=dt; else if (st==='warning') tW+=dt; else tD+=dt;
   }
   const tTot = tN + tW + tD;
 
   // Overall trend
-  const durationHr = n>=2 ? (enriched[n-1].time - enriched[0].time) / 3_600_000 : 0;
-  const trend = durationHr>0 ? (enriched[n-1].pct - enriched[0].pct) / durationHr : 0;
+  const durationHr = (firstTime != null && lastTime != null && lastTime > firstTime)
+    ? (lastTime - firstTime) / 3_600_000 : 0;
+  const trend = durationHr > 0 ? (lastPct - firstPct) / durationHr : 0;
 
   // Max rate of change
   let maxRate = 0;
   for (let i=1; i<enriched.length; i++) {
-    const dt = (enriched[i].time - enriched[i-1].time) / 3_600_000;
-    if (dt>0 && dt<1) {
-      const r = Math.abs((enriched[i].pct - enriched[i-1].pct) / dt);
+    const a = enriched[i-1], b = enriched[i];
+    if (!Number.isFinite(a.pct) || !Number.isFinite(b.pct)) continue;
+    if (!Number.isFinite(a.time) || !Number.isFinite(b.time)) continue;
+    const dt = (b.time - a.time) / 3_600_000;
+    if (dt > 0 && dt < 1) {
+      const r = Math.abs((b.pct - a.pct) / dt);
       if (r > maxRate) maxRate = r;
     }
   }
 
   // Data quality
   const intervals = [];
-  for (let i=1; i<enriched.length; i++) intervals.push(enriched[i].time - enriched[i-1].time);
+  for (let i=1; i<enriched.length; i++) {
+    const dt = enriched[i].time - enriched[i-1].time;
+    if (Number.isFinite(dt) && dt > 0) intervals.push(dt);
+  }
   const avgIntervalMs = intervals.length ? intervals.reduce((s,v)=>s+v,0)/intervals.length : 0;
-  const gapThreshold  = Math.max(avgIntervalMs*4, 120_000); // 4x avg or 2 min
+  const gapThreshold  = Math.max(avgIntervalMs*4, 120_000);
   let gapCount = 0, longestGap = 0;
   for (const dt of intervals) {
     if (dt > gapThreshold) { gapCount++; if (dt > longestGap) longestGap = dt; }
   }
-  const expectedN  = avgIntervalMs>0 ? Math.round((enriched[n-1].time-enriched[0].time) / avgIntervalMs) : n;
-  const coverage   = expectedN>0 ? Math.min(100, Math.round(n/expectedN*100)) : 100;
+  const span = (lastTime != null && firstTime != null) ? lastTime - firstTime : 0;
+  const expectedN  = avgIntervalMs > 0 ? Math.round(span / avgIntervalMs) : count;
+  const coverage   = expectedN > 0 ? Math.min(100, Math.round(count/expectedN*100)) : 100;
 
   return {
-    n, avg: avg.toFixed(1), min: min.toFixed(1), max: max.toFixed(1), sd: sd.toFixed(1),
-    minTime: enriched[minIdx]?.time, maxTime: enriched[maxIdx]?.time,
+    n: count, avg: fmt(avg,1), min: fmt(min,1), max: fmt(max,1), sd: fmt(sd,1),
+    minTime, maxTime,
     pctN: tTot>0 ? +(tN/tTot*100).toFixed(0) : null,
     pctW: tTot>0 ? +(tW/tTot*100).toFixed(0) : null,
     pctD: tTot>0 ? +(tD/tTot*100).toFixed(0) : null,
-    trend: trend.toFixed(2), maxRate: maxRate.toFixed(2),
-    firstTime: enriched[0].time, lastTime: enriched[n-1].time,
-    durationHr: durationHr.toFixed(1),
+    trend: fmt(trend,2), maxRate: fmt(maxRate,2),
+    firstTime, lastTime,
+    durationHr: fmt(durationHr,1),
     avgIntervalSec: Math.round(avgIntervalMs/1000),
     gapCount, longestGapMs: longestGap, coverage,
   };
@@ -161,6 +192,8 @@ function buildAlertEvents(enriched, pond) {
   const events = [];
   let prev = null;
   for (const d of enriched) {
+    // Only consider rows with a real status (skip rows where pct was missing → status=null)
+    if (d.status == null) continue;
     if (prev !== null && d.status !== prev) {
       events.push({ time: d.time, from: prev, to: d.status, pct: d.pct });
     }
@@ -172,6 +205,7 @@ function buildAlertEvents(enriched, pond) {
 function buildHourlyAgg(enriched, pond) {
   const map = new Map();
   for (const d of enriched) {
+    if (!Number.isFinite(d.pct) || !Number.isFinite(d.time)) continue;
     const dt = new Date(d.time);
     const key = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate(), dt.getHours()).getTime();
     if (!map.has(key)) map.set(key, { ts: key, pcts: [], first: d.pct });
@@ -196,6 +230,7 @@ function buildHourlyAgg(enriched, pond) {
 function buildDailyAgg(enriched, pond) {
   const map = new Map();
   for (const d of enriched) {
+    if (!Number.isFinite(d.pct) || !Number.isFinite(d.time)) continue;
     const dt = new Date(d.time);
     const key = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
     if (!map.has(key)) map.set(key, { ts: key, pcts: [], first: d.pct });
@@ -226,10 +261,10 @@ function exportCSV(enriched, pond, start, end) {
       i+1,
       `${dt.getDate()}/${dt.getMonth()+1}/${dt.getFullYear()+543}`,
       dt.toLocaleTimeString('th-TH'),
-      d.pct.toFixed(2), d.wh.toFixed(2), d.volume.toFixed(3),
-      d.battery != null ? d.battery : '',
-      STATUS_TH[d.status] ?? d.status,
-      d.deltaRate != null ? d.deltaRate.toFixed(2) : '',
+      fmt(d.pct, 2), fmt(d.wh, 2), fmt(d.volume, 3),
+      Number.isFinite(d.battery) ? d.battery : '',
+      STATUS_TH[d.status] ?? (d.status ?? ''),
+      fmt(d.deltaRate, 2),
     ].join(',');
   });
   const csv = '﻿' + [headers.join(','), ...rows].join('\r\n');
@@ -344,7 +379,7 @@ function AlertEventRow({ ev }) {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         <StatusChip status={ev.to} small/>
       </div>
-      <div style={{ fontSize:11, fontWeight:700, color: toC }}>{ev.pct.toFixed(1)}%</div>
+      <div style={{ fontSize:11, fontWeight:700, color: toC }}>{fmt(ev.pct, 1)}%</div>
     </div>
   );
 }
@@ -450,16 +485,29 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
   const color  = getStatusColor(status);
   const gradId = `grad-${pond.id}`;
 
-  // Enriched data
+  // Enriched data — normalize every numeric field so legacy/partial Firestore docs
+  // (missing pct/wh/volume/etc.) become explicit null instead of undefined.
   const enriched = useMemo(() => data.map((d, i) => {
-    const wh  = d.wh ?? ((d.pct/100) * pond.depth);
-    const vol = calcVolumeM3(pond.area, wh);
-    const st  = getStatus(d.pct, pond.thresholdYellow, pond.thresholdRed);
-    const prev = data[i-1];
-    const delta = prev != null ? d.pct - prev.pct : null;
-    const dtHr  = prev != null ? (d.time - prev.time) / 3_600_000 : null;
-    const deltaRate = (dtHr != null && dtHr > 0) ? delta / dtHr : null;
-    return { ...d, wh, volume: vol, status: st, delta, deltaRate };
+    const time    = num(d.time);
+    const pct     = num(d.pct);
+    const battery = num(d.battery);
+    const dist    = num(d.dist);
+    const whSrc   = num(d.wh);
+    const wh      = whSrc != null ? whSrc
+                  : (pct != null ? (pct/100) * pond.depth : null);
+    const volSrc  = num(d.volume);
+    const volume  = volSrc != null ? volSrc
+                  : (wh != null ? calcVolumeM3(pond.area, wh) : null);
+    const status  = pct != null
+                  ? getStatus(pct, pond.thresholdYellow, pond.thresholdRed)
+                  : null;
+    const prev    = data[i-1];
+    const prevPct = prev ? num(prev.pct) : null;
+    const prevT   = prev ? num(prev.time) : null;
+    const delta   = (pct != null && prevPct != null) ? pct - prevPct : null;
+    const dtHr    = (time != null && prevT != null) ? (time - prevT) / 3_600_000 : null;
+    const deltaRate = (delta != null && dtHr != null && dtHr > 0) ? delta / dtHr : null;
+    return { time, pct, wh, volume, dist, battery, status, delta, deltaRate, date: d.date };
   }), [data, pond]);
 
   const stats       = useMemo(() => computeStats(enriched, pond),        [enriched, pond]);
@@ -467,18 +515,20 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
   const hourlyAgg   = useMemo(() => buildHourlyAgg(enriched, pond),      [enriched, pond]);
   const dailyAgg    = useMemo(() => buildDailyAgg(enriched, pond),       [enriched, pond]);
 
-  // Chart data — downsample to keep Recharts responsive when readings are dense
+  // Chart data — drop rows without finite time/pct, then downsample to keep
+  // Recharts responsive when readings are dense.
   const chartData = useMemo(() => {
+    const valid = enriched.filter(x => Number.isFinite(x.time) && Number.isFinite(x.pct));
     const MAX_POINTS = 1000;
-    if (enriched.length <= MAX_POINTS) {
-      return enriched.map(x => ({ time: x.time, v: x.pct }));
+    if (valid.length <= MAX_POINTS) {
+      return valid.map(x => ({ time: x.time, v: x.pct }));
     }
-    const step = Math.ceil(enriched.length / MAX_POINTS);
+    const step = Math.ceil(valid.length / MAX_POINTS);
     const out  = [];
-    for (let i = 0; i < enriched.length; i += step) {
-      out.push({ time: enriched[i].time, v: enriched[i].pct });
+    for (let i = 0; i < valid.length; i += step) {
+      out.push({ time: valid[i].time, v: valid[i].pct });
     }
-    const last = enriched[enriched.length - 1];
+    const last = valid[valid.length - 1];
     if (out[out.length - 1].time !== last.time) out.push({ time: last.time, v: last.pct });
     return out;
   }, [enriched]);
@@ -760,22 +810,22 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
                             padding:'10px 14px', borderRadius:12, fontSize:12,
                             boxShadow:'0 4px 16px rgba(0,0,0,.1)', minWidth:170 }}>
                             <div style={{ fontWeight:800, color, fontSize:18, marginBottom:4 }}>
-                              {d.v?.toFixed(1)}%
+                              {fmt(d.v, 1)}%
                             </div>
                             {rp && <>
                               <div style={{ color:'#475569', marginBottom:2 }}>
-                                ความสูง: <b>{rp.wh.toFixed(1)} ซม.</b>
+                                ความสูง: <b>{fmt(rp.wh, 1)} ซม.</b>
                               </div>
                               <div style={{ color:'#475569', marginBottom:4 }}>
-                                ปริมาตร: <b>{rp.volume.toFixed(3)} ม³</b>
+                                ปริมาตร: <b>{fmt(rp.volume, 3)} ม³</b>
                               </div>
                               {rp.deltaRate != null && (
                                 <div style={{ marginBottom:4, fontSize:11, fontWeight:700,
                                   color: Math.abs(rp.deltaRate)>5?'#dc2626':Math.abs(rp.deltaRate)>2?'#d97706':'#16a34a' }}>
-                                  Δ {rp.deltaRate>0?'+':''}{rp.deltaRate.toFixed(1)}%/ชม.
+                                  Δ {rp.deltaRate>0?'+':''}{fmt(rp.deltaRate, 1)}%/ชม.
                                 </div>
                               )}
-                              <StatusChip status={rp.status} small/>
+                              {rp.status && <StatusChip status={rp.status} small/>}
                             </>}
                             <div style={{ color:'#94a3b8', marginTop:6, fontSize:11 }}>
                               {fmtTs(d.time)}
@@ -969,16 +1019,16 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
                                 {fmtTs(row.time)}
                               </td>
                               <td style={{ padding:'7px 14px', fontWeight:800,
-                                color:sc, fontSize:14 }}>{row.pct.toFixed(2)}%</td>
+                                color:sc, fontSize:14 }}>{fmt(row.pct, 2)}%</td>
                               <td style={{ padding:'7px 14px', color:'#374151',
-                                fontWeight:600 }}>{row.wh.toFixed(1)}</td>
+                                fontWeight:600 }}>{fmt(row.wh, 1)}</td>
                               <td style={{ padding:'7px 14px', color:'#374151',
-                                fontWeight:600 }}>{row.volume.toFixed(3)}</td>
+                                fontWeight:600 }}>{fmt(row.volume, 3)}</td>
                               <td style={{ padding:'7px 14px' }}>
-                                <StatusChip status={row.status} small/>
+                                <StatusChip status={row.status ?? 'loading'} small/>
                               </td>
                               <td style={{ padding:'7px 14px', color:'#374151' }}>
-                                {row.battery != null ? `${row.battery}%` : <span style={{ color:'#cbd5e1' }}>—</span>}
+                                {Number.isFinite(row.battery) ? `${row.battery}%` : <span style={{ color:'#cbd5e1' }}>—</span>}
                               </td>
                               <td style={{ padding:'7px 14px' }}>
                                 <DeltaCell deltaRate={row.deltaRate}/>
