@@ -212,28 +212,45 @@ export function usePondData() {
   }, []);
 
   // ── pond_registry: config บ่อ (source of truth ข้ามเครื่อง) ────────────────
+  // Firestore is the source of truth. Every snapshot replaces local state via
+  // mergeWithDefaults(fbPonds) where Firestore fields override the defaults,
+  // so a remote edit always wins. localStorage is only seeded on first launch
+  // (useState initial value) and is never re-applied on top of a Firestore
+  // snapshot.
   useEffect(() => {
     let initialized = false;
 
     const unsub = onSnapshot(collection(db, REGISTRY), snapshot => {
       setIsConnected(true);
 
-      if (snapshot.empty && !initialized) {
+      // Only seed Firestore from localStorage when the SERVER confirms the
+      // collection is empty — not when we're reading an empty offline cache.
+      // Without this guard, an offline-first snapshot could let stale
+      // localStorage overwrite remote data once writes succeed.
+      if (
+        snapshot.empty &&
+        !initialized &&
+        !snapshot.metadata.fromCache
+      ) {
         initialized = true;
-        // Firestore ว่าง → push default ponds ขึ้นไป
         loadPonds().forEach(p => {
-          setDoc(doc(db, REGISTRY, String(p.id)), p).catch(() => {});
+          setDoc(doc(db, REGISTRY, String(p.id)), p)
+            .catch(err => console.error('[pond_registry write failed]', { op: 'seed', id: p.id, err }));
         });
         return;
       }
       initialized = true;
 
+      // Build pond list from Firestore. Firestore fields override DEFAULT_FIELDS
+      // (per-doc base) and DEFAULT_PONDS (per-id base inside mergeWithDefaults),
+      // so a remote edit wins for every field it contains.
       const fbPonds = snapshot.docs
         .map(d => ({ ...DEFAULT_FIELDS, ...d.data() }))
         .filter(p => p.id != null);
 
-      // Merge กับ DEFAULT_PONDS เพื่อการันตีว่าบ่อครบเสมอ
       setPonds(mergeWithDefaults(fbPonds));
+    }, err => {
+      console.error('[pond_registry snapshot failed]', err);
     });
 
     return () => unsub();
@@ -284,19 +301,22 @@ export function usePondData() {
 
   const updatePond = useCallback((id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p)); // optimistic
-    updateDoc(doc(db, REGISTRY, String(id)), updates).catch(() => {});
+    updateDoc(doc(db, REGISTRY, String(id)), updates)
+      .catch(err => console.error('[pond_registry write failed]', { op: 'update', id, updates, err }));
   }, []);
 
   const addPond = useCallback((name, deviceId = '', gatewayId = null) => {
     const newId   = Math.max(0, ...pondsRef.current.map(p => p.id)) + 1;
     const newPond = { ...DEFAULT_FIELDS, id: newId, name, deviceId, gatewayId };
     setPonds(prev => [...prev, newPond]); // optimistic
-    setDoc(doc(db, REGISTRY, String(newId)), newPond).catch(() => {});
+    setDoc(doc(db, REGISTRY, String(newId)), newPond)
+      .catch(err => console.error('[pond_registry write failed]', { op: 'add', id: newId, err }));
   }, []);
 
   const removePond = useCallback((id) => {
     setPonds(prev => prev.filter(p => p.id !== id)); // optimistic
-    deleteDoc(doc(db, REGISTRY, String(id))).catch(() => {});
+    deleteDoc(doc(db, REGISTRY, String(id)))
+      .catch(err => console.error('[pond_registry write failed]', { op: 'remove', id, err }));
     setSensorDistances(prev => { const n = { ...prev }; delete n[id]; return n; });
     setSensorMeta(prev =>      { const n = { ...prev }; delete n[id]; return n; });
     setHistories(prev =>       { const n = { ...prev }; delete n[id]; return n; });

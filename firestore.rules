@@ -2,10 +2,11 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Pond config — read only (app writes via Cloud Function / admin SDK)
+    // Pond config — app writes pond settings (depth/area/thresholds/etc.)
+    // directly from the browser so they sync across devices in real time.
+    // NOTE: no Firebase Auth on this project, so this rule is open. See README.
     match /pond_registry/{docId} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if true;
     }
 
     // Live sensor readings — read only
