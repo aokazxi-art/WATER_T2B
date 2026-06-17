@@ -2,18 +2,15 @@ import { initializeApp } from "firebase/app";
 import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 
 export const firebaseConfig = {
-  apiKey: "AIzaSyCI4NaqTuySWIsZHmNiMmgUet6ZWUkATis",
-  authDomain: "t2bwater.firebaseapp.com",
-  projectId: "t2bwater",
-  storageBucket: "t2bwater.firebasestorage.app",
-  messagingSenderId: "857659938393",
-  appId: "1:857659938393:web:d7c0b30e40a01f06a1c348",
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);
-// Offline persistence: writes are saved to IndexedDB before going to server,
-// so onSnapshot always reflects pending writes immediately — no race condition
-// where the snapshot fires with stale server data and reverts an optimistic update.
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache(),
 });

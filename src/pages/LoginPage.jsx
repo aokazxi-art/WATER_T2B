@@ -6,10 +6,13 @@ export default function LoginPage({ onLogin }) {
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState('');
+  const [loading,  setLoading]  = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const user = login(username, password);
+    setLoading(true);
+    const user = await login(username, password);
+    setLoading(false);
     if (user) { saveSession(user); onLogin(user); }
     else setError('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
   }
@@ -110,14 +113,14 @@ export default function LoginPage({ onLogin }) {
               }}>{error}</div>
             )}
 
-            <button type="submit" style={{
+            <button type="submit" disabled={loading} style={{
               marginTop: 4, padding: '10px', borderRadius: 8, border: 'none',
-              background: '#0284c7', color: '#fff', fontWeight: 600, fontSize: 14,
-              cursor: 'pointer', transition: 'background .12s',
+              background: loading ? '#7ab8d8' : '#0284c7', color: '#fff', fontWeight: 600, fontSize: 14,
+              cursor: loading ? 'default' : 'pointer', transition: 'background .12s',
             }}
-              onMouseEnter={e => { e.currentTarget.style.background = '#0369a1'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = '#0284c7'; }}
-            >เข้าสู่ระบบ</button>
+              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#0369a1'; }}
+              onMouseLeave={e => { if (!loading) e.currentTarget.style.background = '#0284c7'; }}
+            >{loading ? 'กำลังตรวจสอบ...' : 'เข้าสู่ระบบ'}</button>
 
           </form>
         </div>

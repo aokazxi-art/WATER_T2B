@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import HomePage from './pages/HomePage';
 import PondDetailPage from './pages/PondDetailPage';
 import PondSettingsPage from './pages/PondSettingsPage';
@@ -11,9 +11,14 @@ import { loadSession, clearSession } from './auth/auth';
 export default function App() {
   const { ponds, updatePond, addPond, removePond, getPondState, sensorMeta, isConnected, clearPondHistory } = usePondData();
 
-  const [user, setUser] = useState(loadSession);           // null = ยังไม่ login
+  const [user, setUser]         = useState(null);
+  const [authReady, setAuthReady] = useState(false);
   const [page, setPage] = useState('home');
   const [selectedPondId, setSelectedPondId] = useState(null);
+
+  useEffect(() => {
+    loadSession().then(u => { setUser(u); setAuthReady(true); });
+  }, []);
 
   const isAdmin = user?.role === 'admin';
 
@@ -25,6 +30,7 @@ export default function App() {
   function backFromSettings(){ setPage('detail'); }
   function backFromDetail()  { setSelectedPondId(null); setPage('home'); }
 
+  if (!authReady) return null;
   if (!user) return <LoginPage onLogin={handleLogin} />;
 
   if (page === 'dev' && isAdmin) {

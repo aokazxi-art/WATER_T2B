@@ -26,3 +26,7 @@ VITE_FIREBASE*
 .env.local
 
 .vercel
+
+# Secrets
+.env
+server/.env
