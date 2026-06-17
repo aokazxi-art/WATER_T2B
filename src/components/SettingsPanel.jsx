@@ -163,18 +163,59 @@ function AreaField({ areaCm2, onChangeCm2 }) {
 
 export default function SettingsPanel({ pond, onUpdate }) {
   const [local, setLocal] = useState({ ...pond });
-  const changed = JSON.stringify(local) !== JSON.stringify(pond);
+  const [saved, setSaved] = useState(false);
+  const pendingSave = useRef(false);
+
+  // After Apply, re-sync local from the confirmed pond (optimistic fires first, then Firestore)
+  useEffect(() => {
+    if (!pendingSave.current) return;
+    pendingSave.current = false;
+    setLocal({ ...pond });
+    setSaved(true);
+  }, [pond]);
+
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 2500);
+    return () => clearTimeout(t);
+  }, [saved]);
+
+  // Value-based diff — avoids false positives from JSON.stringify key-order differences
+  const changed = Object.keys({ ...local, ...pond }).some(k => local[k] !== pond[k]);
 
   const set = (key) => (val) => setLocal(prev => ({ ...prev, [key]: val }));
-  const apply = () => onUpdate(local);
-  const reset = () => setLocal({ ...pond });
+
+  const apply = () => {
+    pendingSave.current = true;
+    onUpdate(local);
+  };
+  const reset = () => {
+    pendingSave.current = false;
+    setLocal({ ...pond });
+  };
 
   return (
     <div style={{
       background: '#f8fafc', border: '1.5px solid #e2e8f0', borderRadius: 16,
       padding: 20, display: 'flex', flexDirection: 'column', gap: 14,
     }}>
-      <h3 style={{ margin: 0, fontSize: 15, color: '#1e293b', fontWeight: 700 }}>Settings</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h3 style={{ margin: 0, fontSize: 15, color: '#1e293b', fontWeight: 700 }}>Settings</h3>
+        {saved && (
+          <span style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 12, fontWeight: 600, color: '#16a34a',
+            background: '#f0fdf4', border: '1px solid #86efac',
+            borderRadius: 20, padding: '3px 10px',
+          }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Saved
+          </span>
+        )}
+      </div>
 
       <Field label="Pond Name" value={local.name} onChange={set('name')} />
 
