@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 function Field({ label, value, onChange, min, max, step, unit }) {
   return (
