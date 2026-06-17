@@ -297,13 +297,12 @@ export function usePondData() {
 
   // ── CRUD (เขียนลง pond_registry → listener sync ทุกเครื่อง) ───────────────
 
-  const updatePond = useCallback((id, updates) => {
+  const updatePond = useCallback(async (id, updates) => {
     setPonds(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p)); // optimistic
     // setDoc + merge upserts: if the pond_registry doc is missing (e.g. the
     // initial seed never ran), this creates it instead of throwing
     // "No document to update" and silently reverting the edit.
-    setDoc(doc(db, REGISTRY, String(id)), { id, ...updates }, { merge: true })
-      .catch(err => console.error('[pond_registry write failed]', { op: 'update', id, updates, err }));
+    await setDoc(doc(db, REGISTRY, String(id)), { id, ...updates }, { merge: true });
   }, []);
 
   const addPond = useCallback((name, deviceId = '', gatewayId = null) => {

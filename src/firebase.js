@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 
 export const firebaseConfig = {
   apiKey: "AIzaSyCI4NaqTuySWIsZHmNiMmgUet6ZWUkATis",
@@ -11,4 +11,9 @@ export const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+// Offline persistence: writes are saved to IndexedDB before going to server,
+// so onSnapshot always reflects pending writes immediately — no race condition
+// where the snapshot fires with stale server data and reverts an optimistic update.
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache(),
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 function Field({ label, value, onChange, min, max, step, unit }) {
   return (
@@ -163,17 +163,11 @@ function AreaField({ areaCm2, onChangeCm2 }) {
 
 export default function SettingsPanel({ pond, onUpdate }) {
   const [local, setLocal] = useState({ ...pond });
-  const [saved, setSaved] = useState(false);
-  const pendingSave = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+  const [error,  setError]  = useState(null);
 
-  // After Apply, re-sync local from the confirmed pond (optimistic fires first, then Firestore)
-  useEffect(() => {
-    if (!pendingSave.current) return;
-    pendingSave.current = false;
-    setLocal({ ...pond });
-    setSaved(true);
-  }, [pond]);
-
+  // Auto-clear saved badge
   useEffect(() => {
     if (!saved) return;
     const t = setTimeout(() => setSaved(false), 2500);
@@ -183,16 +177,27 @@ export default function SettingsPanel({ pond, onUpdate }) {
   // Value-based diff — avoids false positives from JSON.stringify key-order differences
   const changed = Object.keys({ ...local, ...pond }).some(k => local[k] !== pond[k]);
 
-  const set = (key) => (val) => setLocal(prev => ({ ...prev, [key]: val }));
+  const set = (key) => (val) => { setLocal(prev => ({ ...prev, [key]: val })); setError(null); };
 
-  const apply = () => {
-    pendingSave.current = true;
-    onUpdate(local);
+  const apply = async () => {
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      await onUpdate(local);
+      // Re-sync local from the confirmed pond to keep changed=false
+      setLocal({ ...local });
+      setSaved(true);
+    } catch (err) {
+      setError('บันทึกไม่สำเร็จ — กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่');
+    } finally {
+      setSaving(false);
+    }
   };
-  const reset = () => {
-    pendingSave.current = false;
-    setLocal({ ...pond });
-  };
+
+  const reset = () => { setLocal({ ...pond }); setError(null); };
+
+  const canApply = changed && !saving;
 
   return (
     <div style={{
@@ -222,13 +227,13 @@ export default function SettingsPanel({ pond, onUpdate }) {
       {/* พื้นที่หน้าตัดบ่อ: type=text, format ลูกน้ำ, เก็บ ซม² */}
       <AreaField
         areaCm2={local.area}
-        onChangeCm2={(v) => setLocal(prev => ({ ...prev, area: v }))}
+        onChangeCm2={(v) => { setLocal(prev => ({ ...prev, area: v })); setError(null); }}
       />
 
       {/* ความลึกบ่อ: toggle ซม./ม., เก็บ ซม. */}
       <DepthField
         depthCm={local.depth}
-        onChangeCm={(v) => setLocal(prev => ({ ...prev, depth: v }))}
+        onChangeCm={(v) => { setLocal(prev => ({ ...prev, depth: v })); setError(null); }}
       />
 
       {/* ระยะห่างเซนเซอร์จากขอบบ่อ */}
@@ -250,26 +255,46 @@ export default function SettingsPanel({ pond, onUpdate }) {
         </div>
       </div>
 
+      {error && (
+        <div style={{
+          fontSize: 12, color: '#dc2626', background: '#fef2f2',
+          border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px',
+        }}>
+          {error}
+        </div>
+      )}
+
       <div style={{ display: 'flex', gap: 8 }}>
         <button
           onClick={apply}
-          disabled={!changed}
+          disabled={!canApply}
           style={{
             flex: 1, padding: '8px 0', borderRadius: 8, border: 'none',
-            background: changed ? '#3b82f6' : '#94a3b8', color: '#fff',
-            fontWeight: 600, fontSize: 14, cursor: changed ? 'pointer' : 'default',
+            background: canApply ? '#3b82f6' : '#94a3b8', color: '#fff',
+            fontWeight: 600, fontSize: 14, cursor: canApply ? 'pointer' : 'default',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
-        >Apply</button>
+        >
+          {saving && (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2.5" strokeLinecap="round"
+              style={{ animation: 'spin 0.8s linear infinite' }}>
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+            </svg>
+          )}
+          {saving ? 'Saving...' : 'Apply'}
+        </button>
         <button
           onClick={reset}
-          disabled={!changed}
+          disabled={!changed || saving}
           style={{
             padding: '8px 16px', borderRadius: 8, border: '1.5px solid #e2e8f0',
             background: '#fff', color: '#64748b', fontWeight: 600, fontSize: 14,
-            cursor: changed ? 'pointer' : 'default',
+            cursor: (changed && !saving) ? 'pointer' : 'default',
           }}
         >Reset</button>
       </div>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
