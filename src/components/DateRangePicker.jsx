@@ -48,6 +48,8 @@ export default function DateRangePicker({ value, onChange, accent = '#185FA5', l
     return { y: base.getFullYear(), m: base.getMonth() };
   });
   const [daysData, setDaysData] = useState(() => new Set());
+  const [panel, setPanel]       = useState('days');   // 'days' | 'years'
+  const [yearBase, setYearBase] = useState(() => (parse(value.end) || today).getFullYear() - 6);
   const rootRef = useRef(null);
 
   // เปิด/ปิด popover — ตอนเปิดให้ sel + เดือนที่ดู ตรงกับ value ปัจจุบัน
@@ -58,6 +60,7 @@ export default function DateRangePicker({ value, onChange, accent = '#185FA5', l
         setSel({ start: parse(value.start), end: parse(value.end) });
         setView({ y: base.getFullYear(), m: base.getMonth() });
         setHover(null);
+        setPanel('days');
       }
       return !o;
     });
@@ -111,14 +114,9 @@ export default function DateRangePicker({ value, onChange, accent = '#185FA5', l
   function prevMonth() { setView(v => v.m === 0  ? { y: v.y-1, m: 11 } : { y: v.y, m: v.m-1 }); }
   function nextMonth() { setView(v => v.m === 11 ? { y: v.y+1, m: 0  } : { y: v.y, m: v.m+1 }); }
 
-  // ปีที่เลือกได้: ย้อนหลัง 6 ปี ถึงปีนี้ (รวมปีที่กำลังดูอยู่เสมอ)
-  const years = useMemo(() => {
-    const cy = today.getFullYear();
-    const s = new Set();
-    for (let y = cy - 6; y <= cy; y++) s.add(y);
-    s.add(view.y);
-    return [...s].sort((a, b) => a - b);
-  }, [today, view.y]);
+  // กดที่ชื่อเดือน-ปี → เปิดตารางเลือกปี (drill-up แบบ dashboard มืออาชีพ)
+  function openYears() { setYearBase(view.y - 6); setPanel('years'); }
+  function pickYear(y) { setView(v => ({ ...v, y })); setPanel('days'); }
 
   // สร้างช่องวันของเดือน
   const cells = useMemo(() => {
@@ -176,16 +174,45 @@ export default function DateRangePicker({ value, onChange, accent = '#185FA5', l
 
           {/* calendar */}
           <div style={{ padding:'12px 14px', width:266 }}>
+
+            {panel === 'years' ? (
+              <>
+                {/* ── ตารางเลือกปี ── */}
+                <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:8 }}>
+                  <button onClick={() => setYearBase(b => b - 12)} style={navBtn} aria-label="ย้อน 12 ปี">‹</button>
+                  <span style={{ flex:1, textAlign:'center', fontSize:13, fontWeight:700, color:'#0f172a' }}>
+                    {yearBase + 543} – {yearBase + 11 + 543}
+                  </span>
+                  <button onClick={() => setYearBase(b => b + 12)} style={navBtn} aria-label="ถัดไป 12 ปี">›</button>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6, padding:'4px 0' }}>
+                  {Array.from({ length:12 }, (_, i) => yearBase + i).map(y => {
+                    const future    = y > today.getFullYear();
+                    const selectedY = y === view.y;
+                    const thisYear  = y === today.getFullYear();
+                    let bg = 'transparent', col = '#334155', bd = '1.5px solid transparent';
+                    if (selectedY)      { bg = accent; col = '#fff'; }
+                    else if (thisYear)  { bd = `1.5px solid ${accent}`; col = accent; }
+                    if (future)         { col = '#e2e8f0'; }
+                    return (
+                      <button key={y} disabled={future} onClick={() => pickYear(y)}
+                        style={{ height:46, borderRadius:8, padding:0, fontSize:13,
+                          fontWeight: (thisYear || selectedY) ? 800 : 500,
+                          cursor: future ? 'default' : 'pointer',
+                          background:bg, color:col, border:bd, transition:'background .12s' }}>
+                        {y + 543}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
             <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:8 }}>
               <button onClick={prevMonth} style={navBtn} aria-label="เดือนก่อนหน้า">‹</button>
-              <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#0f172a' }}>{MONTHS[view.m]}</span>
-                <select value={view.y} aria-label="เลือกปี"
-                  onChange={e => setView(v => ({ ...v, y: Number(e.target.value) }))}
-                  style={yearSel}>
-                  {years.map(y => <option key={y} value={y}>{y + 543}</option>)}
-                </select>
-              </div>
+              <button onClick={openYears} style={titleBtn} aria-label="เลือกปี">
+                {MONTHS[view.m]} {view.y + 543}
+              </button>
               <button onClick={nextMonth} style={navBtn} aria-label="เดือนถัดไป">›</button>
             </div>
 
@@ -234,6 +261,8 @@ export default function DateRangePicker({ value, onChange, accent = '#185FA5', l
                 );
               })}
             </div>
+              </>
+            )}
 
             <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:10,
               paddingTop:10, borderTop:'1px solid #f1f5f9' }}>
@@ -256,7 +285,7 @@ const navBtn = {
   fontSize:18, color:'#475569', padding:'0 8px', lineHeight:1,
 };
 
-const yearSel = {
-  fontSize:13, fontWeight:700, color:'#0f172a', cursor:'pointer',
-  border:'1px solid #e2e8f0', borderRadius:6, padding:'2px 4px', background:'#fff',
+const titleBtn = {
+  flex:1, textAlign:'center', fontSize:13, fontWeight:700, color:'#0f172a',
+  background:'none', border:'none', cursor:'pointer', padding:'4px 0', borderRadius:6,
 };
