@@ -5,18 +5,13 @@ import {
 } from 'recharts';
 import TankGauge   from '../components/TankGauge';
 import StatusBadge from '../components/StatusBadge';
+import DateRangePicker from '../components/DateRangePicker';
 import { getStatusColor, getStatus, calcVolumeM3 } from '../utils/waterLevel';
-import { loadDailyHistoryAsync, subscribeDailyHistory } from '../hooks/usePondData';
+import { loadDailyHistoryAsync, subscribeDailyHistory, loadMonthDaysWithData } from '../hooks/usePondData';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const MONTHS_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.',
                    'ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const PRESETS = [
-  { id:'today',  label:'วันนี้' },
-  { id:'7d',     label:'7 วัน' },
-  { id:'30d',    label:'30 วัน' },
-  { id:'custom', label:'กำหนดเอง' },
-];
 const PAGE_SIZE = 50;
 const STATUS_TH = { normal:'ปกติ', warning:'เตือน', danger:'วิกฤต', loading:'—' };
 
@@ -35,13 +30,6 @@ function getDaysInRange(s, e) {
   if (isNaN(cur)||isNaN(end)||cur>end) return days;
   while (cur<=end) { days.push(new Date(cur)); cur.setDate(cur.getDate()+1); }
   return days;
-}
-function getDateRange(preset, cS, cE) {
-  const t = dateToStr(new Date());
-  if (preset==='7d')     return { start: dateToStr(daysAgo(6)),  end: t };
-  if (preset==='30d')    return { start: dateToStr(daysAgo(29)), end: t };
-  if (preset==='custom') return { start: cS, end: cE };
-  return { start: t, end: t };
 }
 async function loadRange(pondId, s, e) {
   const days = getDaysInRange(s, e);
@@ -422,9 +410,7 @@ function Pagination({ page, totalPages, onPage, color }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSettings, onLogout }) {
   const todayStr = dateToStr(new Date());
-  const [preset,  setPreset]  = useState('today');
-  const [cStart,  setCStart]  = useState(todayStr);
-  const [cEnd,    setCEnd]    = useState(todayStr);
+  const [range,   setRange]   = useState(() => ({ start: todayStr, end: todayStr }));
   const [data,    setData]    = useState([]);
   const [loading, setLoading] = useState(false);
   const [tab,     setTab]     = useState('chart');   // chart | hourly | daily | raw
@@ -433,7 +419,7 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
   const [showAlerts, setShowAlerts] = useState(true);
 
   const state = getPondState(pondId);
-  const { start, end } = getDateRange(preset, cStart, cEnd);
+  const { start, end } = range;
 
   useEffect(() => {
     if (!state?.pond || !start || !end) return;
@@ -676,32 +662,11 @@ export default function PondDetailPage({ pondId, getPondState, onBack, onOpenSet
           {/* Filter bar */}
           <div style={{ padding:'10px 20px', borderBottom:'1px solid #f1f5f9',
             display:'flex', flexWrap:'wrap', gap:6, alignItems:'center' }}>
-            {PRESETS.map(p => {
-              const active = preset === p.id;
-              return (
-                <button key={p.id} onClick={() => { setPreset(p.id); setPage(0); }} style={{
-                  padding:'5px 14px', borderRadius:20, fontSize:12, fontWeight:700,
-                  cursor:'pointer', transition:'all .15s',
-                  border: active ? 'none' : '1.5px solid #e2e8f0',
-                  background: active ? color : '#f8fafc',
-                  color: active ? '#fff' : '#64748b',
-                  boxShadow: active ? `0 2px 10px ${color}40` : 'none',
-                }}>{p.label}</button>
-              );
-            })}
-            {preset === 'custom' && (
-              <div style={{ display:'flex', alignItems:'center', gap:8, marginLeft:4, flexWrap:'wrap' }}>
-                <div style={{ width:1, height:18, background:'#e2e8f0' }}/>
-                <input type="date" value={cStart} max={cEnd||todayStr}
-                  onChange={e => { setCStart(e.target.value); setPage(0); }} style={S.dateInput}/>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                  stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
-                  <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
-                </svg>
-                <input type="date" value={cEnd} min={cStart} max={todayStr}
-                  onChange={e => { setCEnd(e.target.value); setPage(0); }} style={S.dateInput}/>
-              </div>
-            )}
+            <DateRangePicker
+              value={range}
+              onChange={r => { setRange(r); setPage(0); }}
+              loadDays={(y, m) => loadMonthDaysWithData(pondId, y, m)}
+            />
           </div>
 
           {/* ── Stats Panel ── */}
