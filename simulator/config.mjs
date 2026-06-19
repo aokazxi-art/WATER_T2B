@@ -13,7 +13,7 @@ export const DEVICES = [
     devAddr:    "11223301",
     nwkSKey:    "01010101010101010101010101010101",
     appSKey:    "02020202020202020202020202020202",
-    distanceMm: 1200,  // 120 cm sensor-to-water
+    distanceMm: 350,  // 35 cm sensor-to-water
     battery:    85,
   },
   {
